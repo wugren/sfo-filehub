@@ -1,0 +1,11 @@
+# Project-added Harness rules. Entries use the same schema as
+# harness/rules/index.yaml and are evaluated before generated rules.
+schema_version: 1
+rules:
+  # 新增的任务文档必须用中文描述
+  - id: task-documents-in-chinese
+    file: harness/custom-rules/task-documents-in-chinese.md
+    activation: always
+    tiers: [trivial, standard, high-risk]
+    stages: [general, proposal, design, implementation, testing, acceptance]
+    modes: [manual, auto-pipeline]

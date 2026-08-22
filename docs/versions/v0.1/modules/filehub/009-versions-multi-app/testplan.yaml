@@ -1,0 +1,114 @@
+schema_version: 1
+# filehub 版本多应用任务测试计划（009-versions-multi-app）
+task_manifest: task.yaml
+risk_profile: risk-profile.yaml
+api_impact:
+  public_api: breaking
+  crate_root_export_change: true
+  build_surface_change: false
+  documentation_examples_affected: true
+evidence_inputs: ["server/src", "server/tests", "cli/src", "cli/tests", "admin-web/src", "admin-web/tests"]
+contract_checks:
+  mode: enabled
+  steps:
+    - id: contract-external-positive
+      name: new CLI/API surface compiles for consumers
+      kind: external-positive
+      assertion: new-path-compiles
+      change_ids: ["fh-versions-multi-app-model", "fh-versions-multi-app-api", "fh-cli-multi-app", "fh-web-multi-app"]
+      run: ["cargo", "check", "-p", "filehub-cli", "--lib", "--bins"]
+    - id: contract-external-negative
+      name: removed publish symbol rejected by compiler
+      kind: external-negative
+      assertion: old-path-rejected-for-removed-symbol
+      change_ids: ["fh-versions-multi-app-model", "fh-versions-multi-app-api", "fh-cli-multi-app", "fh-web-multi-app"]
+      run: ["bash", "docs/versions/v0.1/modules/filehub/009-versions-multi-app/testing/negative-old-publish.sh"]
+    - id: contract-removed-symbol-scan
+      name: no unallowlisted removed symbol references
+      kind: removed-symbol-scan
+      assertion: no-unallowlisted-old-symbol-references
+      change_ids: ["fh-versions-multi-app-model", "fh-versions-multi-app-api", "fh-cli-multi-app", "fh-web-multi-app"]
+      run: ["python3", "harness/scripts/consumer-closure-check.py", "--version", "v0.1", "--module", "filehub", "--task-name", "009-versions-multi-app"]
+    - id: contract-repository-compile-closure
+      name: workspace Rust consumers compile
+      kind: repository-compile-closure
+      assertion: repository-consumers-compile
+      change_ids: ["fh-versions-multi-app-model", "fh-versions-multi-app-api", "fh-cli-multi-app", "fh-web-multi-app"]
+      run: ["cargo", "test", "--workspace", "--no-run", "--all-targets"]
+    - id: contract-documentation-examples
+      name: rust documentation examples compile
+      kind: documentation-examples
+      assertion: documentation-examples-compile
+      change_ids: ["fh-versions-multi-app-model", "fh-versions-multi-app-api", "fh-cli-multi-app", "fh-web-multi-app"]
+      run: ["cargo", "test", "--workspace", "--doc"]
+defaults:
+  workdir: .
+  timeout_sec: 1800
+  env: {}
+levels:
+  unit:
+    mode: enabled
+    summary: 单元：server versions 服务、cli 库、web 客户端方法与参数域
+    test_targets: [server/tests/unit, cli/src, admin-web/tests/unit]
+    preconditions:
+      tools: ["cargo", "npm"]
+      env: []
+      services: []
+      notes: []
+    steps:
+      - id: unit-server
+        name: run filehub-server unit tests
+        change_ids: ["fh-versions-multi-app-model"]
+        run: ["cargo", "test", "-p", "filehub-server", "--test", "unit_tests"]
+      - id: unit-cli-lib
+        name: run filehub-cli library unit tests
+        change_ids: ["fh-cli-multi-app"]
+        run: ["cargo", "test", "-p", "filehub-cli", "--lib"]
+      - id: unit-web
+        name: run admin-web unit tests
+        change_ids: ["fh-web-multi-app"]
+        run: ["npm", "--prefix", "admin-web", "run", "test:unit"]
+  dv:
+    mode: enabled
+    summary: DV：server 生命周期主/失败/持久化、cli mock 工作流、web 构建产物
+    test_targets: [server/tests/dv_tests.rs, cli/tests/dv_tests.rs, admin-web/tests/dv]
+    preconditions:
+      tools: ["cargo", "npm"]
+      env: []
+      services: []
+      notes: []
+    steps:
+      - id: dv-server
+        name: run filehub-server DV tests
+        change_ids: ["fh-versions-multi-app-model", "fh-versions-multi-app-api"]
+        run: ["cargo", "test", "-p", "filehub-server", "--test", "dv_tests"]
+      - id: dv-cli
+        name: run filehub-cli DV tests
+        change_ids: ["fh-cli-multi-app"]
+        run: ["cargo", "test", "-p", "filehub-cli", "--test", "dv_tests"]
+      - id: dv-web
+        name: run admin-web DV build verification
+        change_ids: ["fh-web-multi-app"]
+        run: ["npm", "--prefix", "admin-web", "run", "test:dv"]
+  integration:
+    mode: enabled
+    summary: 集成：HTTP 契约正反例（真实 Actix 服务 / CLI mock / web stub）
+    test_targets: [server/tests/api_integration.rs, cli/tests/api_integration.rs, admin-web/tests/integration]
+    preconditions:
+      tools: ["cargo", "npm"]
+      env: []
+      services: []
+      notes: []
+    steps:
+      - id: integration-server
+        name: run filehub-server API integration tests
+        change_ids: ["fh-versions-multi-app-model", "fh-versions-multi-app-api"]
+        run: ["cargo", "test", "-p", "filehub-server", "--test", "api_integration"]
+      - id: integration-cli
+        name: run filehub-cli API integration tests
+        change_ids: ["fh-cli-multi-app"]
+        run: ["cargo", "test", "-p", "filehub-cli", "--test", "api_integration"]
+      - id: integration-web
+        name: run admin-web integration tests
+        change_ids: ["fh-web-multi-app"]
+        run: ["npm", "--prefix", "admin-web", "run", "test:integration"]

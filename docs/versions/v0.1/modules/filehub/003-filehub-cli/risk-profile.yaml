@@ -1,0 +1,50 @@
+schema_version: 1
+task_manifest: task.yaml
+
+# 机器绑定字段由 risk-profile-check.py --prepare 刷新；提案/设计变更后需重新 prepare 并复核判断。
+change_ids: ["fh-cli-login", "fh-cli-publish", "fh-cli-download", "fh-cli-versions"]
+source_bindings:
+  proposal: proposal.md
+  design_source: design.md
+
+risks:
+  contract:
+    applies: true
+    evidence: ["design.md", "design/cli.md", "design/apiclient.md"]
+    required_checks:
+      - 命令面、参数与退出码在 design/cli.md 冻结，与已批准 proposal 的 login 参数定义一致
+      - 对外交互与 docs/api/v1-contract.md 对齐（含 POST PATCH 语义与错误 JSON 格式）
+  data:
+    applies: true
+    evidence: ["design.md", "design/credential-store.md"]
+    required_checks:
+      - 本地凭据/配置文件格式、路径解析与字段归属在 design/credential-store.md 定义且由 credential_store 独占
+      - 多服务器凭据共存、login 覆盖、logout 清除与文件损坏处理语义在设计中冻结
+  security:
+    applies: true
+    evidence: ["design.md", "design/cli.md", "design/credential-store.md", "design/archive.md"]
+    required_checks:
+      - 密码/token/session 明文不进入命令行参数、日志与环境变量回显；日志脱敏配合 sfo-log
+      - 凭据文件最小权限（类 Unix 0600）与原子写入在设计中定义；token > session 复用优先级冻结
+      - 401 时仅用 refresh_session 续期一次；续期失败要求重新登录且不写损坏凭据
+      - .tar.gz 打包排除绝对路径/越界符号链接；下载文件名净化且校验 SHA-256 后才落盘
+  runtime:
+    applies: true
+    evidence: ["design.md", "design/cli.md", "design/apiclient.md", "design/archive.md"]
+    required_checks:
+      - 登录/发布/下载/查询的命令流与失败-超时-重试行为在设计中定义，4xx 不盲目重试
+      - 发布 409 视为终态不重传；下载先校验后原子 rename；超时与网络错误有稳定退出码
+  build:
+    applies: true
+    evidence: ["design.md", "design/cli.md"]
+    required_checks:
+      - cli crate 布局、二进制目标与依赖（sfo-log、reqwest-rustls、clap、tar/flate2、sha2 等）在设计中定义
+      - 依赖来源与版本经 Cargo.lock 锁定；Windows/macOS/Linux 构建与单二进制交付路径在设计中定义
+  ui:
+    applies: false
+    evidence: CLI 无图形/Web 界面，交互仅限 stdin 登录提示；UI/accessibility 工作流归 002-filehub-web 任务独立承担
+    required_checks: []
+  harness:
+    applies: false
+    evidence: 本次任务不修改 Harness 规则、检查器或测试基础设施；仅按既有生命周期命令推进
+    required_checks: []

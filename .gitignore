@@ -1,0 +1,15 @@
+# Local Harness runtime state (task indexes, baselines, evidence, run artifacts)
+.harness/
+# Local virtual environment created by the root test shortcuts
+.venv/
+# Python bytecode caches created by the dependency-free harness checkers
+__pycache__/
+*.pyc
+# Frontend dependencies and build outputs
+node_modules/
+# WSL/Windows 混用后残留的原生二进制锁定目录（esbuild/rollup），删除需在
+# Windows 侧进行；先忽略避免污染工作区与 CI 变更清单。
+node_modules.bak-esbuild-stuck/
+admin-web/dist/
+data
+target

@@ -1,0 +1,77 @@
+schema_version: 1
+task_manifest: task.yaml
+
+# 机器绑定字段由 risk-profile-check.py --prepare 刷新；提案/设计变更后需重新 prepare 并复核判断。
+change_ids: ["fh-server-account", "fh-server-permissions", "fh-server-tokens", "fh-server-files", "fh-server-versions", "fh-server-projects", "fh-server-http"]
+source_bindings:
+  proposal: proposal.md
+  design_source: design.md
+
+risks:
+  contract:
+    applies: true
+    evidence:
+      - design.md
+      - design/http.md
+      - design/versions.md
+      - docs/modules/filehub.md
+    required_checks:
+      - v1 API 路由、请求/响应 DTO 与错误码契约在 design/http.md 中冻结
+      - web（002）与 cli（003）作为契约消费方在设计中显式映射
+      - 对外接口与内部子模块接口分离，http 模块只做装配
+  data:
+    applies: true
+    evidence:
+      - design.md
+      - design/account.md
+      - design/permissions.md
+      - design/tokens.md
+      - design/files.md
+      - design/versions.md
+      - design/projects.md
+    required_checks:
+      - 每张持久化表有唯一归属子模块（State and Ownership）
+      - schema 迁移方向与回滚约束在设计文档中定义
+      - 版本不可覆盖与文件标识幂等约束在设计中冻结
+  security:
+    applies: true
+    evidence:
+      - design.md
+      - design/account.md
+      - design/permissions.md
+      - design/tokens.md
+      - design/http.md
+    required_checks:
+      - session 凭据仅经 Authorization 头传输且不落 cookie；token 服务端仅存属性与验签公钥，签名私钥签发后即弃、不保存历史 JWT 明文
+      - 认证链路区分登录 session（Principal::User）与 token session（Principal::Token），两类凭据不可互冒
+      - 访问矩阵（账号角色 × 项目协作角色 × token 二次限制）在权限模块统一判定
+      - public/private 边界、.tar.gz 路径防穿越与完整性校验在设计中定义
+  runtime:
+    applies: true
+    evidence:
+      - design.md
+      - design/versions.md
+      - design/files.md
+      - design/http.md
+    required_checks:
+      - 原子发布顺序（权限校验 -> 文件入库 -> 版本落库）与部分失败行为在设计中定义
+      - crate 内子模块依赖图无环（设计 UML 由 doc-structure-check 校验）
+      - 接口失败、超时与幂等边界在设计文档中记录
+  build:
+    applies: true
+    evidence:
+      - design.md
+      - design/http.md
+      - docs/modules/filehub.md
+    required_checks:
+      - filehub-server crate 布局与编译/打包输出在设计文档中定义
+      - 依赖来源（crates.io/Git/本地路径）与版本锁定策略在设计文档中记录
+      - 部署配置（TLS、data_dir）与回滚约束在设计文档中记录
+  ui:
+    applies: false
+    evidence: 服务后台无 UI 面；管理后台页面由 002-filehub-web 独立任务承担，本次不涉及界面工作流
+    required_checks: []
+  harness:
+    applies: false
+    evidence: 本次任务不修改 Harness 规则、检查器或测试基础设施；仅按既有生命周期命令推进
+    required_checks: []

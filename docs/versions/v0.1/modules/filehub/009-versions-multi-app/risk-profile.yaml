@@ -1,0 +1,50 @@
+schema_version: 1
+task_manifest: task.yaml
+
+# 机器绑定字段由 risk-profile-check.py --prepare 刷新；提案/设计变更后需重新 prepare 并复核判断。
+change_ids: ["fh-versions-multi-app-model", "fh-versions-multi-app-api", "fh-cli-multi-app", "fh-web-multi-app"]
+source_bindings:
+  proposal: proposal.md
+  design_source: design.md
+
+risks:
+  contract:
+    applies: true
+    evidence: ["design.md", "design/api.md", "docs/api/v1-contract.md"]
+    required_checks:
+      - v1 契约新增版本创建/锁定端点，app 发布/更新/删除端点与下载参数在 design/api.md 冻结，与已批准 proposal 语义一致
+      - VersionRecord 破缺到 apps[]、锁定后写操作 409、缺省 app 下载兼容语义在契约文档中明示
+  data:
+    applies: true
+    evidence: ["design.md", "design/versions.md", "server/migrations/0006_versions.sql"]
+    required_checks:
+      - version→app 1:N 关联（UNIQUE(version_id, app)、file_id 唯一）与 locked_at 归属在 design/versions.md 冻结
+      - 不做既有数据兼容/回填，schema 直接重建，部署侧重建路径（如有旧库）在设计中记录
+  security:
+    applies: true
+    evidence: ["design.md", "design/versions.md", "design/api.md"]
+    required_checks:
+      - 版本创建/app 发布/更新/删除沿用 artifacts:write，锁定沿用 Project 级 administration，按 Principal 判定
+      - 锁定不可逆且写操作统一拦截，避免低权限路径绕过（服务层校验而非仅 HTTP 层）
+  runtime:
+    applies: true
+    evidence: ["design.md", "design/versions.md", "server/src/versions/service.rs"]
+    required_checks:
+      - app UPSERT、删除、锁定与并发创建版本的事务/冲突语义在设计中冻结
+      - 更新/删除后旧文件脱离引用集由 files.gc_orphans 回收；失败路径不丢旧文件引用
+  build:
+    applies: true
+    evidence: ["design.md", "design/cli.md", "design/web.md", "Cargo.toml", "admin-web/package.json"]
+    required_checks:
+      - server（cargo workspace）与 admin-web（npm）构建面变更在设计中冻结，无新增依赖
+      - cli 命令面/参数扩展与 admin-web 页面调整在各自设计文档中定义，构建与测试入口不变
+  ui:
+    applies: true
+    evidence: ["design.md", "design/web.md", "admin-web/src/pages/ProjectDetailPage.tsx"]
+    required_checks:
+      - 创建版本、按 app 上传/更新/删除、锁定与锁定后写操作禁用等交互在设计/web.md 冻结
+      - 409（重复创建/锁定版本写操作）与 422（多 app 缺省下载）等错误在界面展示路径设计中覆盖
+  harness:
+    applies: false
+    evidence: 本次任务不修改 Harness 规则、检查器或测试基础设施，仅按既有生命周期命令推进
+    required_checks: []

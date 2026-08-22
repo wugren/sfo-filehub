@@ -1,0 +1,49 @@
+schema_version: 1
+task_manifest: task.yaml
+
+change_ids: ["fh-web-login", "fh-web-project-versions", "fh-web-token-manage", "fh-web-members"]
+source_bindings:
+  proposal: proposal.md
+  design_source: design.md
+
+risks:
+  contract:
+    applies: true
+    evidence: ["docs/api/v1-contract.md", "docs/versions/v0.1/modules/filehub/002-filehub-web/design.md", "docs/versions/v0.1/modules/filehub/002-filehub-web/design/api-client.md"]
+    required_checks:
+      - 契约测试覆盖登录/refresh 包装解包、/api/v1 错误体与状态码映射、project_scope 序列化、POST 更新语义、下载响应头与文件名
+  data:
+    applies: true
+    evidence: ["docs/versions/v0.1/modules/filehub/002-filehub-web/design/session.md", "docs/versions/v0.1/modules/filehub/002-filehub-web/design/tokens.md"]
+    required_checks:
+      - 验证会话凭据不写入 localStorage 且登出/刷新失败后清除
+      - 验证创建/修改/轮换返回的 JWT 明文仅一次性展示且组件卸载后不可再读
+  security:
+    applies: true
+    evidence: ["docs/versions/v0.1/modules/filehub/002-filehub-web/design/session.md", "docs/versions/v0.1/modules/filehub/002-filehub-web/design/api-client.md", "docs/versions/v0.1/modules/filehub/002-filehub-web/design/tokens.md"]
+    required_checks:
+      - 验证受保护请求携带 Bearer 且明文不出现在日志/普通状态缓存
+      - 验证 401 后 refresh 恰一次重试、失败回登录页
+      - 验证 403/404 错误态呈现且页面不本地放行
+  runtime:
+    applies: true
+    evidence: ["docs/versions/v0.1/modules/filehub/002-filehub-web/design/api-client.md", "docs/versions/v0.1/modules/filehub/002-filehub-web/design/projects.md"]
+    required_checks:
+      - 验证网络失败/超时进入 TransportError 且 UI 呈现错误态
+      - 验证下载失败（4xx/网络）回退并清理 ObjectURL
+  build:
+    applies: true
+    evidence: ["docs/versions/v0.1/modules/filehub/002-filehub-web/design/build.md"]
+    required_checks:
+      - 验证生产构建成功且 dist 产出 index.html 与静态资源
+      - 验证依赖通过 package-lock.json 锁定并可复现安装
+  ui:
+    applies: true
+    evidence: ["docs/versions/v0.1/modules/filehub/002-filehub-web/design/session.md", "docs/versions/v0.1/modules/filehub/002-filehub-web/design/tokens.md"]
+    required_checks:
+      - 验证未登录访问受保护路由重定向登录页
+      - 验证登录失败错误态与 token 明文一次性展示交互
+  harness:
+    applies: false
+    evidence: 不修改 harness 规则、检查器或测试入口；复用既有 lifecycle 与 unified test entrypoint
+    required_checks: []

@@ -1,0 +1,28 @@
+# Mechanical quality gates for this repository.
+#
+# harness/scripts/quality-check.py runs every gate below and fails when any
+# gate fails. When runnable gates are declared, acceptance always requires a
+# passing quality run artifact under the git-ignored
+# .harness/test-results/quality-runs/ directory; report wording cannot mark them
+# irrelevant. Only an explicit gates: [] declaration makes them not relevant.
+#
+# Declare the repository's build/lint/typecheck commands here. Gates must be
+# non-interactive, deterministic, and return a meaningful exit code.
+#
+# An explicitly empty list is a versioned, reviewable decision and requires a
+# concrete non-placeholder empty_reason. A missing file or reason fails closed.
+schema_version: 1
+gates: []
+empty_reason: "Greenfield scaffold: sfo-filehub currently contains only Harness workflow files and no production build/lint/typecheck surface; gates will be declared once the first module's build tooling lands."
+# Example (Rust):
+# gates:
+#   - id: build
+#     run: ["cargo", "build", "--workspace"]
+#   - id: clippy
+#     run: ["cargo", "clippy", "--workspace", "--", "-D", "warnings"]
+# Example (Python):
+# gates:
+#   - id: lint
+#     run: ["uv", "run", "--active", "ruff", "check", "."]
+#   - id: typecheck
+#     run: ["uv", "run", "--active", "mypy", "."]

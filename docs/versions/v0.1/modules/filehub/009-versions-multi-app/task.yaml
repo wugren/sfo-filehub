@@ -1,0 +1,42 @@
+schema_version: 1
+
+# 本任务包在用户确认前保持 pending；确认后写入最终 tier。
+workflow_tier: high-risk
+
+version: v0.1
+packet_module: filehub
+task_name: 009-versions-multi-app
+stage: acceptance
+mode: manual
+auto_pipeline_start_stage:
+
+proposal: proposal.md
+completion_report: completion-report.md
+change_record: docs/changes/009-versions-multi-app.md
+design: design.md
+testing: testing.md
+testplan: testplan.yaml
+acceptance_report: acceptance-report.md
+pipeline_plan: pipeline/plan.md
+risk_profile: risk-profile.yaml
+lifecycle_state: lifecycle.json
+changed_paths_file: .harness/evidence/v0.1/stage-scope/009-versions-multi-app.paths
+baseline_manifest:
+
+changes:
+  - id: fh-versions-multi-app-model
+    target_module: filehub
+    scope_paths: [server/src/versions/, server/src/model/record.rs, server/migrations/, server/tests/unit/versions.rs]
+    changed_paths_file:
+  - id: fh-versions-multi-app-api
+    target_module: filehub
+    scope_paths: [server/src/versions/http.rs, server/tests/, docs/api/v1-contract.md, docs/modules/filehub.md]
+    changed_paths_file:
+  - id: fh-cli-multi-app
+    target_module: filehub
+    scope_paths: [cli/src/, cli/tests/]
+    changed_paths_file:
+  - id: fh-web-multi-app
+    target_module: filehub
+    scope_paths: [admin-web/src/, admin-web/tests/]
+    changed_paths_file:

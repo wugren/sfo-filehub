@@ -1,0 +1,43 @@
+schema_version: 1
+
+# 用户已确认 standard 层级（2026-08-22）。
+workflow_tier: standard
+
+# Canonical task identity.
+version: v0.1
+packet_module: filehub
+task_name: 020-github-actions-build-release
+stage: general
+mode: manual
+auto_pipeline_start_stage:
+
+proposal: proposal.md
+completion_report: completion-report.md
+change_record: docs/changes/020-github-actions-build-release.md
+design: design.md
+testing: testing.md
+testplan: testplan.yaml
+acceptance_report: acceptance-report.md
+pipeline_plan: pipeline/plan.md
+risk_profile: risk-profile.yaml
+lifecycle_state: lifecycle.json
+changed_paths_file: .harness/evidence/v0.1/stage-scope/020-github-actions-build-release.paths
+baseline_manifest: .harness/baselines/v0.1/020-github-actions-build-release-delivery/manifest.json
+
+changes:
+  - id: fh-single-ci-rust
+    target_module: filehub
+    scope_paths: [".github/workflows/build.yml"]
+    changed_paths_file:
+  - id: fh-single-ci-web
+    target_module: filehub
+    scope_paths: [".github/workflows/build.yml"]
+    changed_paths_file:
+  - id: fh-single-docker-image
+    target_module: filehub
+    scope_paths: [".github/workflows/build.yml"]
+    changed_paths_file:
+  - id: fh-single-release-publish
+    target_module: filehub
+    scope_paths: [".github/workflows/build.yml"]
+    changed_paths_file:

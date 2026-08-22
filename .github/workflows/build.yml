@@ -1,0 +1,363 @@
+name: Build, test, image and release
+
+# filehub 唯一构建/发布工作流：
+# - push master：编译 + 测试 + 生成 Docker 镜像（不推送）；
+# - pull_request：编译 + 测试（快速门禁，不构建镜像）；
+# - push v* 标签：编译 + 测试 + 生成并发布（GHCR 镜像 + GitHub Release）。
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  version:
+    name: Resolve version and publish gate
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      release_tag: ${{ steps.resolve.outputs.release_tag }}
+      publish: ${{ steps.resolve.outputs.publish }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Resolve version and gates
+        id: resolve
+        env:
+          CANONICAL_REPOSITORY: ${{ vars.CANONICAL_REPOSITORY }}
+        run: |
+          set -euo pipefail
+
+          version="$(cargo metadata --no-deps --format-version 1 | python3 -c '
+          import json
+          import re
+          import sys
+
+          packages = [item for item in json.load(sys.stdin)["packages"] if item["name"] == "filehub-server"]
+          if len(packages) != 1:
+              raise SystemExit("expected exactly one filehub-server package in cargo metadata")
+          version = packages[0]["version"]
+          if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is None:
+              raise SystemExit(f"unsupported workspace version: {version}")
+          print(version)
+          ')"
+
+          publish=false
+          release_tag=""
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            release_tag="${GITHUB_REF_NAME}"
+            if [[ "${release_tag}" != "v${version}" ]]; then
+              echo "Release tag ${release_tag} does not match workspace version ${version}." >&2
+              exit 1
+            fi
+            expected="${CANONICAL_REPOSITORY:-${GITHUB_REPOSITORY_OWNER}/sfo-filehub}"
+            if [[ "${GITHUB_REPOSITORY}" != "${expected}" ]]; then
+              echo "Repository ${GITHUB_REPOSITORY} is not the canonical release repository ${expected}; build only." >&2
+            else
+              publish=true
+            fi
+          fi
+
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+          echo "publish=${publish}" >> "${GITHUB_OUTPUT}"
+
+  test-rust:
+    name: Rust tests and server release build
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Test Rust workspace
+        run: cargo test --workspace --all-targets
+
+      - name: Build filehub-server (release)
+        run: cargo build --release -p filehub-server
+
+      - name: Store server binary
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: server-binary
+          path: target/release/filehub-server
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+  test-web:
+    name: admin-web tests and build
+    needs: version
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: admin-web
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: admin-web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Run integration tests
+        run: npm run test:integration
+
+      - name: Build and verify dist
+        run: npm run test:dv
+
+      - name: Store admin-web dist
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: web-dist
+          path: admin-web/dist
+          if-no-files-found: error
+          retention-days: 14
+
+  build-cli:
+    name: Build filehub-cli (${{ matrix.artifact }})
+    needs: version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            artifact: linux-x86_64
+            binary: filehub
+          - os: macos-14
+            artifact: macos-aarch64
+            binary: filehub
+          - os: windows-2022
+            artifact: windows-x86_64
+            binary: filehub.exe
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build filehub-cli (release)
+        run: cargo build --release -p filehub-cli
+
+      - name: Package CLI archive
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          ARTIFACT: ${{ matrix.artifact }}
+          BINARY: ${{ matrix.binary }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          tar -czf "dist/filehub-cli_${VERSION}_${ARTIFACT}.tar.gz" -C target/release "${BINARY}"
+          test -s "dist/filehub-cli_${VERSION}_${ARTIFACT}.tar.gz"
+
+      - name: Store CLI archive
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: cli-${{ matrix.artifact }}
+          path: dist/filehub-cli_${{ needs.version.outputs.version }}_${{ matrix.artifact }}.tar.gz
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+  build-image:
+    name: Build and publish Docker image
+    if: ${{ github.event_name == 'push' }}
+    needs: [version, test-rust, test-web]
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Download server binary
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: server-binary
+          path: ctx/server
+
+      - name: Download admin-web dist
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: web-dist
+          path: ctx/web
+
+      - name: Assemble minimal image context
+        run: |
+          set -euo pipefail
+          mkdir -p ctx/server ctx/web
+          chmod +x ctx/server/filehub-server
+          test -x ctx/server/filehub-server
+          test -f ctx/web/index.html
+          cp docker/Dockerfile docker/nginx.conf docker/entrypoint.sh ctx/
+
+      - name: Build Docker image
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          image="ghcr.io/${owner}/filehub:v${VERSION}"
+          docker build --tag "$image" ctx
+          docker image inspect "$image" >/dev/null
+
+      - name: Publish image to GHCR
+        if: ${{ needs.version.outputs.publish == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          image="ghcr.io/${owner}/filehub:v${VERSION}"
+          echo "$GH_TOKEN" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+          docker push "$image"
+          digest="$(docker buildx imagetools inspect "$image" --format '{{.Manifest.Digest}}')"
+          test -n "$digest"
+
+  release:
+    name: Publish GitHub Release
+    if: ${{ needs.version.outputs.publish == 'true' }}
+    needs: [version, test-rust, test-web, build-cli, build-image]
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Download server binary
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: server-binary
+          path: dist/raw/server
+
+      - name: Download admin-web dist
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: web-dist
+          path: dist/raw/web
+
+      - name: Download CLI archives
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: cli-*
+          path: dist/raw/cli
+          merge-multiple: true
+
+      - name: Package server and admin-web release archive
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/server dist/web
+          cp dist/raw/server/filehub-server dist/server/filehub-server
+          cp -R dist/raw/web/. dist/web/
+          chmod +x dist/server/filehub-server
+          tar -czf "dist/filehub-server_${VERSION}_linux_x86_64.tar.gz" -C dist server web
+          test -s "dist/filehub-server_${VERSION}_linux_x86_64.tar.gz"
+
+      - name: Verify release assets
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          cp dist/raw/cli/*.tar.gz dist/
+          expected=(
+            "dist/filehub-server_${VERSION}_linux_x86_64.tar.gz"
+            "dist/filehub-cli_${VERSION}_linux-x86_64.tar.gz"
+            "dist/filehub-cli_${VERSION}_macos-aarch64.tar.gz"
+            "dist/filehub-cli_${VERSION}_windows-x86_64.tar.gz"
+          )
+          for asset in "${expected[@]}"; do
+            test -s "$asset"
+            tar -tzf "$asset" >/dev/null
+          done
+          ls -l dist/*.tar.gz
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+          RELEASE_TAG: ${{ needs.version.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          assets=(dist/*.tar.gz)
+          if [[ ${#assets[@]} -ne 4 ]]; then
+            echo "Expected exactly four release archives, found ${#assets[@]}." >&2
+            exit 1
+          fi
+          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" "${assets[@]}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --clobber
+          else
+            owner="${GITHUB_REPOSITORY_OWNER,,}"
+            printf -v notes 'filehub %s\n\nDocker image: ghcr.io/%s/filehub:v%s\n\nRelease assets:\n- filehub-server_%s_linux-x86_64.tar.gz\n- filehub-cli_%s_linux-x86_64.tar.gz\n- filehub-cli_%s_macos-aarch64.tar.gz\n- filehub-cli_%s_windows-x86_64.tar.gz' \
+              "$VERSION" "$owner" "$VERSION" "$VERSION" "$VERSION" "$VERSION" "$VERSION"
+            gh release create "${RELEASE_TAG}" "${assets[@]}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --verify-tag \
+              --title "filehub ${VERSION}" \
+              --notes "$notes"
+          fi

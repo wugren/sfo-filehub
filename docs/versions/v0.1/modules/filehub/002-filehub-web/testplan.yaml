@@ -1,0 +1,65 @@
+schema_version: 1
+task_manifest: task.yaml
+risk_profile: risk-profile.yaml
+api_impact:
+  public_api: none
+  crate_root_export_change: false
+  build_surface_change: false
+  documentation_examples_affected: false
+evidence_inputs: ["admin-web/src", "admin-web/tests", "admin-web/package.json", "admin-web/package-lock.json", "docs/api/v1-contract.md", "docs/versions/v0.1/modules/filehub/002-filehub-web/design.md", "docs/versions/v0.1/modules/filehub/002-filehub-web/risk-profile.yaml"]
+contract_checks:
+  mode: disabled
+  reason: 无 breaking/migration API、crate-root 导出或构建面变化；契约与安全风险由 unit/integration 层级步骤覆盖
+  steps: []
+defaults:
+  workdir: .
+  timeout_sec: 600
+  env: {}
+levels:
+  unit:
+    mode: enabled
+    summary: 前端核心逻辑与组件单元测试（错误分类、契约辅助、API client、会话状态、路由/登录组件）
+    test_targets:
+      - admin-web/tests/unit
+    preconditions:
+      tools: [npm]
+      env: []
+      services: []
+      notes: [依赖由 admin-web/package-lock.json 锁定；npm 需可访问本地缓存]
+    steps:
+      - id: web-unit
+        name: run admin-web unit tests
+        change_ids: ["fh-web-login", "fh-web-project-versions", "fh-web-token-manage", "fh-web-members"]
+        run: ["npm", "--prefix", "admin-web", "run", "test:unit"]
+
+  dv:
+    mode: enabled
+    summary: 单模块可运行验证：生产构建 + dist 静态产物结构校验
+    test_targets:
+      - admin-web/tests/dv
+    preconditions:
+      tools: [npm]
+      env: []
+      services: []
+      notes: []
+    steps:
+      - id: web-dv
+        name: run admin-web build and dist verification
+        change_ids: ["fh-web-login", "fh-web-project-versions", "fh-web-token-manage", "fh-web-members"]
+        run: ["npm", "--prefix", "admin-web", "run", "test:dv"]
+
+  integration:
+    mode: enabled
+    summary: 与 v1 契约桩的端到端契约验证（sfo-account 包装、projects/collaborators/tokens/versions/download、错误语义）
+    test_targets:
+      - admin-web/tests/integration
+    preconditions:
+      tools: [npm]
+      env: []
+      services: []
+      notes: [契约桩为 node:http 内置服务，无外部依赖]
+    steps:
+      - id: web-integration
+        name: run admin-web contract integration tests
+        change_ids: ["fh-web-login", "fh-web-project-versions", "fh-web-token-manage", "fh-web-members"]
+        run: ["npm", "--prefix", "admin-web", "run", "test:integration"]

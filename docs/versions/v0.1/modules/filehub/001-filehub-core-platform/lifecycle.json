@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "stages": {
+    "acceptance": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/001-filehub-core-platform/acceptance-report.md": "0e47756dd6e3f0c15cd226e50d266d4e0f26937e52cfc164e65df42301e3bbc0"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "0f854ef4cef8d94e93f9b53e017a363cd9676092423eca765c2453fd6cf2f888"
+    },
+    "design": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/001-filehub-core-platform/design.md": "a8699e31a3a552a979780326dd6779db5fad15a6eb8d536bb31c240191767833",
+        "docs/versions/v0.1/modules/filehub/001-filehub-core-platform/risk-profile.yaml": "62d3cc53046e5ae7f6293b073ec849209d78196fea3f423508cbb2fa253a48e6"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "0f854ef4cef8d94e93f9b53e017a363cd9676092423eca765c2453fd6cf2f888"
+    },
+    "implementation": {
+      "inputs": {},
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "0f854ef4cef8d94e93f9b53e017a363cd9676092423eca765c2453fd6cf2f888"
+    },
+    "proposal": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/001-filehub-core-platform/proposal.md": "7fd987cad727a21710c8a9b3a0084fce7f80a820b77bc131c9ad5369d7cb200f"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "0f854ef4cef8d94e93f9b53e017a363cd9676092423eca765c2453fd6cf2f888"
+    },
+    "testing": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/001-filehub-core-platform/testing.md": "890e56ba54bd97df903e6ebc8db0dad0131768515962ea4af3ac99cd37699b96",
+        "docs/versions/v0.1/modules/filehub/001-filehub-core-platform/testplan.yaml": "c1ce2af22789ee52be8e1da89c33c55a03a7e3c95458ca8396664829396bf850"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "0f854ef4cef8d94e93f9b53e017a363cd9676092423eca765c2453fd6cf2f888",
+      "test_run": ".harness/test-results/test-runs/20260819T144744Z-filehub+001-filehub-core-platform-all.json",
+      "test_run_sha256": "e590ad93740b7acf2b1706be94f91deb7ba96febb0dd84744c2b523f79ca6d2b"
+    }
+  },
+  "task_manifest": "task.yaml"
+}

@@ -1,0 +1,34 @@
+[package]
+name = "filehub-cli"
+version.workspace = true
+edition.workspace = true
+description = "filehub 文件集散发布客户端（filehub-cli）"
+license.workspace = true
+
+[lib]
+name = "filehub_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "filehub"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+dirs = "6"
+flate2 = "1"
+log = "0.4"
+rpassword = "7"
+futures-util = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "stream"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sfo-log = "0.1"
+sha2 = "0.10"
+tar = "0.4"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs", "io-util"] }
+toml = "0.9"
+dialoguer = "0.12.0"
+
+[dev-dependencies]
+tempfile = "3"

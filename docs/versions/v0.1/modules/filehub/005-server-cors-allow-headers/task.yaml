@@ -1,0 +1,30 @@
+schema_version: 1
+
+# 本任务包在用户确认前保持 pending；确认后写入最终 tier。
+workflow_tier: pending
+
+version: v0.1
+packet_module: filehub
+task_name: 005-server-cors-allow-headers
+stage: proposal
+mode: manual
+auto_pipeline_start_stage:
+
+proposal: proposal.md
+completion_report: completion-report.md
+change_record: docs/changes/005-server-cors-allow-headers.md
+design: design.md
+testing: testing.md
+testplan: testplan.yaml
+acceptance_report: acceptance-report.md
+pipeline_plan: pipeline/plan.md
+risk_profile: risk-profile.yaml
+lifecycle_state: lifecycle.json
+changed_paths_file: .harness/evidence/v0.1/stage-scope/005-server-cors-allow-headers.paths
+baseline_manifest:
+
+changes:
+  - id: fh-cors-allow-headers
+    target_module: filehub
+    scope_paths: [filehub-server.json, server/config.example.json]
+    changed_paths_file:

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "stages": {
+    "acceptance": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/003-filehub-cli/acceptance-report.md": "d486999798d3be3ad00b898fdc778a3ee593922d260282dc21e6ad0f7ca09337"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "cc2f63109c6711d3dc81c79ae6b71bbaaa0069936c4932b477f1d81d5d3247af"
+    },
+    "design": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/003-filehub-cli/design.md": "ed06f1b352c105a429d9c40617ee47a94585290e684fd9c6e6bda3f43c719c8f",
+        "docs/versions/v0.1/modules/filehub/003-filehub-cli/risk-profile.yaml": "be2dd813b93621a71f3053978319eeb9eb37264a4192c760e74112adc6c63bb9"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "cc2f63109c6711d3dc81c79ae6b71bbaaa0069936c4932b477f1d81d5d3247af"
+    },
+    "implementation": {
+      "inputs": {},
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "cc2f63109c6711d3dc81c79ae6b71bbaaa0069936c4932b477f1d81d5d3247af"
+    },
+    "proposal": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/003-filehub-cli/proposal.md": "6f6fe7fab31a680f4bb25711da48078ccc63776f246fdc97db2396e4aeb28408"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "cc2f63109c6711d3dc81c79ae6b71bbaaa0069936c4932b477f1d81d5d3247af"
+    },
+    "testing": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/003-filehub-cli/testing.md": "0862b94dad52a7ba16b8f053da0221868cfc563ddf71b1c2566c7e90c7fe24fc",
+        "docs/versions/v0.1/modules/filehub/003-filehub-cli/testplan.yaml": "77ae6047ddd8207499c3b83da5ba845915ffa5016baa48e6b5f524b29bfae657"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "cc2f63109c6711d3dc81c79ae6b71bbaaa0069936c4932b477f1d81d5d3247af",
+      "test_run": ".harness/test-results/test-runs/20260819T171010Z-filehub+003-filehub-cli-all.json",
+      "test_run_sha256": "b9005a9082a72d71cd0eea66d4847962b1f3700660afe07685e906fd1eee0bd7"
+    }
+  },
+  "task_manifest": "task.yaml"
+}

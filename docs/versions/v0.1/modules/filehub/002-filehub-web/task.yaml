@@ -1,0 +1,32 @@
+schema_version: 1
+version: v0.1
+packet_module: filehub
+task_name: 002-filehub-web
+workflow_tier: high-risk
+stage: acceptance
+mode: manual
+proposal: proposal.md
+completion_report: completion-report.md
+change_record:
+design: design.md
+testing: testing.md
+testplan: testplan.yaml
+acceptance_report: acceptance-report.md
+pipeline_plan: pipeline/plan.md
+risk_profile: risk-profile.yaml
+lifecycle_state: lifecycle.json
+changed_paths_file: .harness/evidence/v0.1/stage-scope/002-filehub-web.paths
+baseline_manifest:
+changes:
+  - id: fh-web-login
+    target_module: filehub
+    scope_paths: [admin-web/src/, admin-web/tests/]
+  - id: fh-web-project-versions
+    target_module: filehub
+    scope_paths: [admin-web/src/, admin-web/tests/]
+  - id: fh-web-token-manage
+    target_module: filehub
+    scope_paths: [admin-web/src/, admin-web/tests/]
+  - id: fh-web-members
+    target_module: filehub
+    scope_paths: [admin-web/src/, admin-web/tests/]

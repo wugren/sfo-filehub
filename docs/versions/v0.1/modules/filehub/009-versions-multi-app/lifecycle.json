@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "stages": {
+    "acceptance": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/009-versions-multi-app/acceptance-report.md": "820924b9dbe081896188cf92ca12f5b7b1aea36de216fa8e800138df8fc8c7e3"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "687dece55493d67883c259cd2e3cf45e05ab096a39a7fe6f006d8900a736bb6d"
+    },
+    "design": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/009-versions-multi-app/design.md": "b5c7090543676d84675435d25c07abb6c551e89fbb607209351f52c908ff0ccc",
+        "docs/versions/v0.1/modules/filehub/009-versions-multi-app/risk-profile.yaml": "73ced1f2ae9fef54a8cfa2024800f00a43eb892f952b97da0b8c57d74965e257"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "687dece55493d67883c259cd2e3cf45e05ab096a39a7fe6f006d8900a736bb6d"
+    },
+    "implementation": {
+      "inputs": {},
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "687dece55493d67883c259cd2e3cf45e05ab096a39a7fe6f006d8900a736bb6d"
+    },
+    "proposal": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/009-versions-multi-app/proposal.md": "80bdd0c35782efa82848c94e67301a4bb8c2bc7be6a9ec1e226ccc7318d942c1"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "687dece55493d67883c259cd2e3cf45e05ab096a39a7fe6f006d8900a736bb6d"
+    },
+    "testing": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/009-versions-multi-app/testing.md": "44f3f932649e8412334f48a3463a20261ee3080392c4aa4d62c43d36d00ff2b7",
+        "docs/versions/v0.1/modules/filehub/009-versions-multi-app/testplan.yaml": "f180dfafdda07832b2defb0811ac8407bcc3aeb292723a4a924e4a10a3cafd1e"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "687dece55493d67883c259cd2e3cf45e05ab096a39a7fe6f006d8900a736bb6d",
+      "test_run": ".harness/test-results/test-runs/20260821T071924Z-filehub+009-versions-multi-app-all.json",
+      "test_run_sha256": "43981e87f5ba282a37926e70224148efa694c2471a91b6df9d19dfc726422b4d"
+    }
+  },
+  "task_manifest": "task.yaml"
+}

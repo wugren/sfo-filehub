@@ -1,0 +1,28 @@
+schema_version: 1
+version: v0.1
+packet_module: filehub
+task_name: 003-filehub-cli
+workflow_tier: high-risk
+stage: acceptance
+mode: manual
+proposal: proposal.md
+testing: testing.md
+testplan: testplan.yaml
+acceptance_report: acceptance-report.md
+risk_profile: risk-profile.yaml
+design: design.md
+lifecycle_state: lifecycle.json
+changed_paths_file: .harness/evidence/v0.1/stage-scope/003-filehub-cli.paths
+changes:
+  - id: fh-cli-login
+    target_module: filehub
+    scope_paths: [cli/src/, tests/]
+  - id: fh-cli-publish
+    target_module: filehub
+    scope_paths: [cli/src/, tests/]
+  - id: fh-cli-download
+    target_module: filehub
+    scope_paths: [cli/src/, tests/]
+  - id: fh-cli-versions
+    target_module: filehub
+    scope_paths: [cli/src/, tests/]
