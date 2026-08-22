@@ -1,15 +1,15 @@
 name: Build, test, image and release
 
 # filehub 唯一构建/发布工作流：
-# - push master：编译 + 测试 + 生成 Docker 镜像（不推送）；
+# - push main：编译 + 测试 + 生成 Docker 镜像（不推送）；
 # - pull_request：编译 + 测试（快速门禁，不构建镜像）；
 # - push v* 标签：编译 + 测试 + 生成并发布（GHCR 镜像 + GitHub Release）。
 on:
   push:
-    branches: [master]
+    branches: [main]
     tags: ["v*"]
   pull_request:
-    branches: [master]
+    branches: [main]
 
 concurrency:
   group: build-${{ github.ref }}
