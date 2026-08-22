@@ -1,0 +1,34 @@
+schema_version: 1
+
+# 用户已确认 standard 层级与方案乙（2026-08-22 回复「确认」）。
+workflow_tier: standard
+
+version: v0.1
+packet_module: filehub
+task_name: 022-ci-merge-cli-job
+stage: general
+mode: manual
+auto_pipeline_start_stage:
+
+proposal: proposal.md
+completion_report: completion-report.md
+change_record: docs/changes/022-ci-merge-cli-job.md
+design: design.md
+testing: testing.md
+testplan: testplan.yaml
+acceptance_report: acceptance-report.md
+pipeline_plan: pipeline/plan.md
+risk_profile: risk-profile.yaml
+lifecycle_state: lifecycle.json
+changed_paths_file: .harness/evidence/v0.1/stage-scope/022-ci-merge-cli-job.paths
+baseline_manifest: .harness/baselines/v0.1/022-ci-merge-cli-job-delivery/manifest.json
+
+changes:
+  - id: fh-consolidate-rust-build
+    target_module: filehub
+    scope_paths: [".github/workflows/build.yml"]
+    changed_paths_file:
+  - id: fh-one-shot-release
+    target_module: filehub
+    scope_paths: [".github/workflows/build.yml"]
+    changed_paths_file:

@@ -1,15 +1,12 @@
 name: Build, test, image and release
 
 # filehub 唯一构建/发布工作流：
-# - push main：编译 + 测试 + 生成 Docker 镜像（不推送）；
-# - pull_request：编译 + 测试（快速门禁，不构建镜像）；
+# - workflow_dispatch：人工触发，编译 + 测试 + 生成 Docker 镜像（不推送）；
 # - push v* 标签：编译 + 测试 + 生成并发布（GHCR 镜像 + GitHub Release）。
 on:
+  workflow_dispatch:
   push:
-    branches: [main]
     tags: ["v*"]
-  pull_request:
-    branches: [main]
 
 concurrency:
   group: build-${{ github.ref }}
@@ -75,10 +72,27 @@ jobs:
           echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
           echo "publish=${publish}" >> "${GITHUB_OUTPUT}"
 
-  test-rust:
-    name: Rust tests and server release build
+  build:
+    name: Rust build (${{ matrix.artifact }})
     needs: version
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            artifact: linux-x86_64
+            binary: filehub
+            server: true
+          - os: macos-14
+            artifact: macos-aarch64
+            binary: filehub
+          - os: windows-2022
+            artifact: windows-x86_64
+            binary: filehub.exe
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Check out source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -99,17 +113,44 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Test Rust workspace
+        if: ${{ matrix.server }}
         run: cargo test --workspace --all-targets
 
       - name: Build filehub-server (release)
+        if: ${{ matrix.server }}
         run: cargo build --release -p filehub-server
 
+      - name: Build filehub-cli (release)
+        run: cargo build --release -p filehub-cli
+
       - name: Store server binary
-        if: ${{ github.event_name != 'pull_request' }}
+        if: ${{ matrix.server }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: server-binary
           path: target/release/filehub-server
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Package CLI archive
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          ARTIFACT: ${{ matrix.artifact }}
+          BINARY: ${{ matrix.binary }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          tar -czf "dist/filehub-cli_${VERSION}_${ARTIFACT}.tar.gz" -C target/release "${BINARY}"
+          test -s "dist/filehub-cli_${VERSION}_${ARTIFACT}.tar.gz"
+
+      - name: Store CLI archive
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: cli-${{ matrix.artifact }}
+          path: dist/filehub-cli_${{ needs.version.outputs.version }}_${{ matrix.artifact }}.tar.gz
           archive: false
           if-no-files-found: error
           retention-days: 14
@@ -145,7 +186,6 @@ jobs:
         run: npm run test:dv
 
       - name: Store admin-web dist
-        if: ${{ github.event_name != 'pull_request' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: web-dist
@@ -153,74 +193,10 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  build-cli:
-    name: Build filehub-cli (${{ matrix.artifact }})
-    needs: version
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            artifact: linux-x86_64
-            binary: filehub
-          - os: macos-14
-            artifact: macos-aarch64
-            binary: filehub
-          - os: windows-2022
-            artifact: windows-x86_64
-            binary: filehub.exe
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - name: Check out source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Install Rust toolchain
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
-
-      - name: Cache cargo registry
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      - name: Build filehub-cli (release)
-        run: cargo build --release -p filehub-cli
-
-      - name: Package CLI archive
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
-          ARTIFACT: ${{ matrix.artifact }}
-          BINARY: ${{ matrix.binary }}
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          tar -czf "dist/filehub-cli_${VERSION}_${ARTIFACT}.tar.gz" -C target/release "${BINARY}"
-          test -s "dist/filehub-cli_${VERSION}_${ARTIFACT}.tar.gz"
-
-      - name: Store CLI archive
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: cli-${{ matrix.artifact }}
-          path: dist/filehub-cli_${{ needs.version.outputs.version }}_${{ matrix.artifact }}.tar.gz
-          archive: false
-          if-no-files-found: error
-          retention-days: 14
-
   build-image:
     name: Build and publish Docker image
-    if: ${{ github.event_name == 'push' }}
-    needs: [version, test-rust, test-web]
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+    needs: [version, build, test-web]
     runs-on: ubuntu-24.04
     permissions:
       actions: read
@@ -278,7 +254,7 @@ jobs:
   release:
     name: Publish GitHub Release
     if: ${{ needs.version.outputs.publish == 'true' }}
-    needs: [version, test-rust, test-web, build-cli, build-image]
+    needs: [version, build, test-web, build-image]
     runs-on: ubuntu-24.04
     permissions:
       actions: read
