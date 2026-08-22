@@ -233,7 +233,7 @@ jobs:
       - name: Download server binary
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: server-binary
+          name: filehub-server
           path: ctx/server
 
       - name: Download admin-web dist
@@ -287,7 +287,7 @@ jobs:
       - name: Download server binary
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: server-binary
+          name: filehub-server
           path: dist/raw/server
 
       - name: Download admin-web dist
@@ -299,7 +299,7 @@ jobs:
       - name: Download CLI archives
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          pattern: cli-*
+          pattern: filehub-cli_*.tar.gz
           path: dist/raw/cli
           merge-multiple: true
 
