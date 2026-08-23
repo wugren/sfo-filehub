@@ -1,7 +1,7 @@
 name: Build, test, image and release
 
 # filehub 唯一构建/发布工作流：
-# - workflow_dispatch：人工触发，编译 + 测试 + 生成 Docker 镜像（不推送）；
+# - workflow_dispatch：人工触发，编译 + 测试 + 生成 Docker 镜像 + CLI 三平台归档（不推送）；
 # - push v* 标签：编译 + 测试 + 生成并发布（GHCR 镜像 + GitHub Release）。
 on:
   workflow_dispatch:
@@ -134,7 +134,7 @@ jobs:
           retention-days: 14
 
       - name: Package CLI archive
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
         env:
           VERSION: ${{ needs.version.outputs.version }}
           ARTIFACT: ${{ matrix.artifact }}
@@ -146,7 +146,7 @@ jobs:
           test -s "dist/filehub-cli_${VERSION}_${ARTIFACT}.tar.gz"
 
       - name: Store CLI archive
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: cli-${{ matrix.artifact }}
