@@ -1,16 +1,27 @@
 name: Build, test, image and release
 
 # filehub 唯一构建/发布工作流：
-# - workflow_dispatch：人工触发，编译 + 测试 + 生成 Docker 镜像 + CLI 三平台归档（不推送）；
+# - workflow_dispatch：人工触发，默认只编译/测试/打包；显式 publish=true 时受控发布；
 # - push v* 标签：编译 + 测试 + 生成并发布（GHCR 镜像 + GitHub Release）。
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the GHCR image and GitHub Release
+        required: false
+        default: false
+        type: boolean
+      release_tag:
+        description: Existing vMAJOR.MINOR.PATCH tag to publish
+        required: false
+        default: ""
+        type: string
   push:
     tags: ["v*"]
 
 concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-${{ inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -27,19 +38,30 @@ jobs:
     outputs:
       version: ${{ steps.resolve.outputs.version }}
       release_tag: ${{ steps.resolve.outputs.release_tag }}
-      publish: ${{ steps.resolve.outputs.publish }}
+      source_sha: ${{ steps.resolve.outputs.source_sha }}
+      publish_requested: ${{ steps.resolve.outputs.publish_requested }}
     steps:
       - name: Check out source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Resolve version and gates
+      - name: Install Rust toolchain for dependency resolution
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Update Rust dependencies and resolve version gates
         id: resolve
         env:
           CANONICAL_REPOSITORY: ${{ vars.CANONICAL_REPOSITORY }}
+          DISPATCH_PUBLISH: ${{ inputs.publish }}
+          DISPATCH_RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
 
-          version="$(cargo metadata --no-deps --format-version 1 | python3 -c '
+          cargo update
+          test -s Cargo.lock
+
+          version="$(cargo metadata --locked --no-deps --format-version 1 | python3 -c '
           import json
           import re
           import sys
@@ -53,25 +75,58 @@ jobs:
           print(version)
           ')"
 
-          publish=false
-          release_tag=""
-          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            release_tag="${GITHUB_REF_NAME}"
+          validate_release_tag() {
+            if [[ ! "${release_tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Release tag ${release_tag} must match vMAJOR.MINOR.PATCH." >&2
+              exit 1
+            fi
             if [[ "${release_tag}" != "v${version}" ]]; then
               echo "Release tag ${release_tag} does not match workspace version ${version}." >&2
               exit 1
             fi
+          }
+
+          source_sha="${GITHUB_SHA}"
+          publish_requested=false
+          release_tag=""
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            release_tag="${GITHUB_REF_NAME}"
+            validate_release_tag
             expected="${CANONICAL_REPOSITORY:-${GITHUB_REPOSITORY_OWNER}/sfo-filehub}"
             if [[ "${GITHUB_REPOSITORY}" != "${expected}" ]]; then
               echo "Repository ${GITHUB_REPOSITORY} is not the canonical release repository ${expected}; build only." >&2
             else
-              publish=true
+              publish_requested=true
             fi
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${DISPATCH_PUBLISH}" == "true" ]]; then
+            release_tag="${DISPATCH_RELEASE_TAG}"
+            if [[ -z "${release_tag}" ]]; then
+              echo "release_tag is required when publish=true." >&2
+              exit 1
+            fi
+            validate_release_tag
+            expected="${CANONICAL_REPOSITORY:-${GITHUB_REPOSITORY_OWNER}/sfo-filehub}"
+            if [[ "${GITHUB_REPOSITORY}" != "${expected}" ]]; then
+              echo "Manual publication is allowed only in ${expected}; got ${GITHUB_REPOSITORY}." >&2
+              exit 1
+            fi
+            publish_requested=true
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${DISPATCH_RELEASE_TAG}" ]]; then
+            echo "release_tag is ignored because publish=false."
           fi
 
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
           echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
-          echo "publish=${publish}" >> "${GITHUB_OUTPUT}"
+          echo "source_sha=${source_sha}" >> "${GITHUB_OUTPUT}"
+          echo "publish_requested=${publish_requested}" >> "${GITHUB_OUTPUT}"
+
+      - name: Store updated Cargo.lock
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: cargo-lock
+          path: Cargo.lock
+          if-no-files-found: error
+          retention-days: 14
 
   build:
     name: Rust build (${{ matrix.artifact }})
@@ -97,6 +152,21 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.version.outputs.source_sha }}
+
+      - name: Download updated Cargo.lock
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: cargo-lock
+          path: .ci-cargo-lock
+
+      - name: Install updated Cargo.lock
+        run: |
+          set -euo pipefail
+          test -s .ci-cargo-lock/Cargo.lock
+          cp .ci-cargo-lock/Cargo.lock Cargo.lock
+          test -s Cargo.lock
 
       - name: Install Rust toolchain
         run: |
@@ -122,14 +192,14 @@ jobs:
 
       - name: Test Rust workspace
         if: ${{ matrix.server }}
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace --all-targets --locked
 
       - name: Build filehub-server (release)
         if: ${{ matrix.server }}
-        run: cargo build --release -p filehub-server --target ${MUSL_TARGET}
+        run: cargo build --release -p filehub-server --target ${MUSL_TARGET} --locked
 
       - name: Build filehub-cli (release)
-        run: cargo build --release -p filehub-cli
+        run: cargo build --release -p filehub-cli --locked
 
       - name: Store server binary
         if: ${{ matrix.server }}
@@ -171,6 +241,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.version.outputs.source_sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -199,10 +271,55 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  authorize-publication:
+    name: Authorize publication
+    needs: [version, build, test-web]
+    runs-on: ubuntu-24.04
+    outputs:
+      publish: ${{ steps.authorize.outputs.publish }}
+      release_tag: ${{ steps.authorize.outputs.release_tag }}
+    steps:
+      - name: Check out immutable source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.version.outputs.source_sha }}
+          fetch-depth: 1
+
+      - name: Resolve and authorize release tag
+        id: authorize
+        env:
+          PUBLISH_REQUESTED: ${{ needs.version.outputs.publish_requested }}
+          RELEASE_TAG: ${{ needs.version.outputs.release_tag }}
+          SOURCE_SHA: ${{ needs.version.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+
+          publish=false
+          release_tag=""
+          if [[ "${PUBLISH_REQUESTED}" == "true" ]]; then
+            if [[ ! "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Invalid release tag: ${RELEASE_TAG}" >&2
+              exit 1
+            fi
+            git fetch --force --no-tags origin \
+              "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+            checkout_sha="$(git rev-parse 'HEAD^{commit}')"
+            tag_sha="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+            if [[ "${checkout_sha}" != "${SOURCE_SHA}" || "${tag_sha}" != "${SOURCE_SHA}" ]]; then
+              echo "Release tag ${RELEASE_TAG} (${tag_sha}) does not match built source ${SOURCE_SHA}." >&2
+              exit 1
+            fi
+            publish=true
+            release_tag="${RELEASE_TAG}"
+          fi
+
+          echo "publish=${publish}" >> "${GITHUB_OUTPUT}"
+          echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+
   build-image:
     name: Build and publish Docker image
     if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-    needs: [version, build, test-web]
+    needs: [version, build, test-web, authorize-publication]
     runs-on: ubuntu-24.04
     permissions:
       actions: read
@@ -211,6 +328,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.version.outputs.source_sha }}
 
       - name: Download server binary
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -270,12 +389,21 @@ jobs:
           echo "container smoke test passed (filehub-server running, /healthz ok)"
 
       - name: Publish image to GHCR
-        if: ${{ needs.version.outputs.publish == 'true' }}
+        if: ${{ needs.authorize-publication.outputs.publish == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.authorize-publication.outputs.release_tag }}
+          SOURCE_SHA: ${{ needs.version.outputs.source_sha }}
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           set -euo pipefail
+          git fetch --force --no-tags origin \
+            "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+          tag_sha="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+          if [[ "${tag_sha}" != "${SOURCE_SHA}" ]]; then
+            echo "Release tag ${RELEASE_TAG} moved to ${tag_sha}; expected ${SOURCE_SHA}." >&2
+            exit 1
+          fi
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           image="ghcr.io/${owner}/filehub:v${VERSION}"
           echo "$GH_TOKEN" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
@@ -285,13 +413,33 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    if: ${{ needs.version.outputs.publish == 'true' }}
-    needs: [version, build, test-web, build-image]
+    if: ${{ needs.authorize-publication.outputs.publish == 'true' }}
+    needs: [version, build, test-web, authorize-publication, build-image]
     runs-on: ubuntu-24.04
     permissions:
       actions: read
       contents: write
     steps:
+      - name: Check out immutable source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.version.outputs.source_sha }}
+          fetch-depth: 1
+
+      - name: Verify release tag still points at built source
+        env:
+          RELEASE_TAG: ${{ needs.authorize-publication.outputs.release_tag }}
+          SOURCE_SHA: ${{ needs.version.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --force --no-tags origin \
+            "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+          tag_sha="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+          if [[ "${tag_sha}" != "${SOURCE_SHA}" ]]; then
+            echo "Release tag ${RELEASE_TAG} moved to ${tag_sha}; expected ${SOURCE_SHA}." >&2
+            exit 1
+          fi
+
       - name: Download server binary
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -346,7 +494,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.version.outputs.version }}
-          RELEASE_TAG: ${{ needs.version.outputs.release_tag }}
+          RELEASE_TAG: ${{ needs.authorize-publication.outputs.release_tag }}
         run: |
           set -euo pipefail
           shopt -s nullglob

@@ -1,0 +1,52 @@
+schema_version: 1
+task_manifest: task.yaml
+
+change_ids: ["fh-manual-build-publish", "fh-ci-cargo-update"]
+source_bindings:
+  proposal: proposal.md
+  design_source: pipeline/plan.md
+
+risks:
+  contract:
+    applies: true
+    evidence:
+      - .github/workflows/build.yml
+    required_checks:
+      - workflow_dispatch 的 publish 与 release_tag 输入保持默认只构建、显式才发布的兼容语义
+      - push v* 的现有自动发布入口、版本语义和四件 tar.gz 资产契约保持不变
+  data:
+    applies: false
+    evidence: "不修改数据库、持久化 schema、序列化格式或产品数据；CI 临时 Cargo.lock 只属于单次运行 artifact。"
+    required_checks: []
+  security:
+    applies: true
+    evidence:
+      - .github/workflows/build.yml
+    required_checks:
+      - 人工发布必须同时满足 publish=true、release_tag 有效、canonical 仓库以及 tag commit 等于构建 SHA
+      - GHCR 与 GitHub Release 写权限只存在于需要写入的 job，失败门控不得执行发布写操作
+      - 同 tag/ref 的新 run 不得取消正在执行外部发布写入的 run，必须串行等待完成
+  runtime:
+    applies: false
+    evidence: "不修改 filehub 进程、并发、生命周期、重试或运行时集成；只调整托管 CI 编排。"
+    required_checks: []
+  build:
+    applies: true
+    evidence:
+      - .github/workflows/build.yml
+      - Cargo.toml
+      - Cargo.lock
+    required_checks:
+      - 任何 cargo test 或 cargo build 之前只集中执行一次 cargo update
+      - Linux、macOS、Windows Rust job 下载并校验同一次 cargo update 生成的同一 Cargo.lock
+      - cargo metadata、cargo test 与 cargo build 消费共享 lockfile 时使用 --locked，禁止平台 job 静默重解析
+      - 发布构建仍生成 server 加 web 与三平台 CLI 的四件 tar.gz，并使用更新后的依赖解析结果
+      - 错误依赖解析、lock artifact 缺失或下载失败时构建与发布均失败关闭
+  ui:
+    applies: false
+    evidence: "不修改 admin-web 页面、产品交互或无障碍行为；GitHub Actions 输入属于 CI 触发契约，已归入 contract。"
+    required_checks: []
+  harness:
+    applies: false
+    evidence: "不修改 Harness 规则、检查器、模板或统一测试基础设施；仅消费现有 high-risk auto-pipeline。"
+    required_checks: []

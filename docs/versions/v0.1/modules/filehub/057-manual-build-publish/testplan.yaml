@@ -1,0 +1,68 @@
+schema_version: 1
+task_manifest: task.yaml
+risk_profile: risk-profile.yaml
+api_impact:
+  public_api: none
+  crate_root_export_change: false
+  build_surface_change: true
+  documentation_examples_affected: false
+evidence_inputs: [".github/workflows/build.yml", "tests/github_actions_build_contract.py"]
+contract_checks:
+  mode: enabled
+  steps:
+    - id: repository-compile-closure
+      kind: repository-compile-closure
+      assertion: repository-consumers-compile
+      name: 使用锁定的当前工作树依赖编译全部 Rust workspace targets
+      change_ids: ["fh-manual-build-publish", "fh-ci-cargo-update"]
+      run: ["cargo", "test", "--workspace", "--no-run", "--all-targets", "--locked"]
+defaults:
+  workdir: .
+  timeout_sec: 1800
+  env: {}
+levels:
+  unit:
+    mode: enabled
+    summary: 校验 workflow inputs、不可取消并发、cargo update 唯一性、失败门控与全部 Rust 命令的 --locked 顺序
+    test_targets:
+      - tests/github_actions_build_contract.py
+    preconditions:
+      tools: [python3]
+      env: []
+      services: []
+      notes: [需要 PyYAML]
+    steps:
+      - id: github-actions-unit-contract
+        name: 运行 GitHub Actions 单步骤与分支契约测试
+        change_ids: ["fh-manual-build-publish", "fh-ci-cargo-update"]
+        run: ["python3", "tests/github_actions_build_contract.py", "--suite", "unit"]
+  dv:
+    mode: enabled
+    summary: 校验单工作流 job 依赖、共享 lock artifact 与授权输出消费链
+    test_targets:
+      - tests/github_actions_build_contract.py
+    preconditions:
+      tools: [python3]
+      env: []
+      services: []
+      notes: [不访问 GitHub 外部服务]
+    steps:
+      - id: github-actions-dv-contract
+        name: 运行 GitHub Actions 工作流级契约测试
+        change_ids: ["fh-manual-build-publish", "fh-ci-cargo-update"]
+        run: ["python3", "tests/github_actions_build_contract.py", "--suite", "dv"]
+  integration:
+    mode: enabled
+    summary: 校验跨 job SHA 绑定、写入前 tag 复检、Release 资产、shell 语法与 job DAG
+    test_targets:
+      - tests/github_actions_build_contract.py
+    preconditions:
+      tools: [python3, bash]
+      env: []
+      services: []
+      notes: [真实 GHCR 与 GitHub Release 写入由 hosted run 验证]
+    steps:
+      - id: github-actions-integration-contract
+        name: 运行 GitHub Actions 跨 job 集成契约测试
+        change_ids: ["fh-manual-build-publish", "fh-ci-cargo-update"]
+        run: ["python3", "tests/github_actions_build_contract.py", "--suite", "integration"]

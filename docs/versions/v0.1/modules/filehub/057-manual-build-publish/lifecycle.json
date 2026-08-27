@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "stages": {
+    "proposal": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/057-manual-build-publish/proposal.md": "6d028cb9997ebfea469ef0d4a7e86a661e0d6177ccad8c9f9c4b5ace8e443f42"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "826878982d4f9dade3deac0ff3d4ec7a06db55f462bd1c041a2a10a068c3f449"
+    }
+  },
+  "task_manifest": "task.yaml"
+}
