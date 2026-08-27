@@ -81,7 +81,7 @@ describe("ApiClient token contract details", () => {
     });
   });
 
-  it("distinguishes name-only update (TokenSummary) from a resign (TokenIssued)", async () => {
+  it("returns TokenSummary for attribute updates and TokenIssued only for rotate (re-sign)", async () => {
     const client = new ApiClient({ baseUrl: "http://127.0.0.1:9999" });
     globalThis.fetch = vi.fn().mockResolvedValueOnce(
       jsonResponse(200, {
@@ -96,10 +96,12 @@ describe("ApiClient token contract details", () => {
       jsonResponse(200, { token_id: 5, jwt: "NEW", name: "renamed", expires_at: null }),
     ) as unknown as typeof fetch;
 
-    const nameOnly = await client.updateToken("B", 5, { name: "renamed" });
-    expect("jwt" in nameOnly).toBe(false);
-    const resigned = await client.updateToken("B", 5, { scopes: ["artifacts:read"] });
-    expect("jwt" in resigned).toBe(true);
+    const summary = await client.updateToken("B", 5, { scopes: ["artifacts:read"] });
+    expect("jwt" in summary).toBe(false);
+    expect(summary.scopes).toEqual(["artifacts:read"]);
+    const issued = await client.rotateToken("B", 5);
+    expect("jwt" in issued).toBe(true);
+    expect(issued.jwt).toBe("NEW");
   });
 
   it("sends Authorization on download and returns a Blob", async () => {
@@ -166,6 +168,8 @@ describe("ApiClient version/app lifecycle methods", () => {
       expect(init?.method).toBe("PUT");
       expect(init?.headers).toMatchObject({ Authorization: "Bearer B" });
       expect(init?.body).toBeInstanceOf(FormData);
+      const form = init?.body as FormData;
+      expect(form.get("sha256")).toBe("abc123");
       return jsonResponse(201, {
         project_id: 4,
         version: "1.0.0",
@@ -184,7 +188,7 @@ describe("ApiClient version/app lifecycle methods", () => {
     });
     globalThis.fetch = mock as unknown as typeof fetch;
     const client = new ApiClient({ baseUrl: "http://127.0.0.1:9999" });
-    const record = await client.uploadApp("B", 4, "1.0.0", "server", new Blob(["x"]));
+    const record = await client.uploadApp("B", 4, "1.0.0", "server", new Blob(["x"]), "abc123");
     expect(record.apps[0].app).toBe("server");
     const url = String(mock.mock.calls[0][0]);
     expect(url).toContain("/api/v1/projects/4/versions/1.0.0/apps/server");
@@ -196,8 +200,11 @@ describe("ApiClient version/app lifecycle methods", () => {
     ) as unknown as typeof fetch;
     const client = new ApiClient({ baseUrl: "http://127.0.0.1:9999" });
     await expect(
-      client.uploadApp("B", 4, "1.0.0", "web", new Blob(["x"])),
-    ).rejects.toMatchObject({ kind: "conflict", status: 409 });
+      client.uploadApp("B", 4, "1.0.0", "server", new Blob(["x"]), "abc123"),
+    ).rejects.toMatchObject({
+      kind: "conflict",
+      status: 409,
+    });
   });
 
   it("locks a version and deletes an app through PUT/DELETE", async () => {
@@ -234,4 +241,91 @@ describe("ApiClient empty responses", () => {
 
 it("exposes ApiError type for consumers", () => {
   expect(ApiError).toBeDefined();
+});
+
+describe("ApiClient project list pagination", () => {
+  const demo = { project_id: 1, name: "demo", visibility: "private" as const, owner: 1 };
+
+  it("appends limit/offset and parses X-Total-Count", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      jsonResponse(200, [demo], { "x-total-count": "23" }),
+    ) as unknown as typeof fetch;
+    const client = new ApiClient({ baseUrl: "http://127.0.0.1:9999" });
+    const page = await client.listProjectsPage("B", { limit: 10, offset: 20 });
+    expect(page.items).toEqual([demo]);
+    expect(page.total).toBe(23);
+    const url = String((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+    expect(url).toContain("/api/v1/projects?limit=10&offset=20");
+  });
+
+  it("omits query params when absent and falls back to items length", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(jsonResponse(200, [demo])) as unknown as typeof fetch;
+    const client = new ApiClient({ baseUrl: "http://127.0.0.1:9999" });
+    const page = await client.listProjectsPage("B");
+    expect(page.items).toEqual([demo]);
+    expect(page.total).toBe(1);
+    const url = String((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+    expect(url).toContain("/api/v1/projects");
+    expect(url).not.toContain("limit=");
+  });
+
+  it("treats a non-numeric total header as items length", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      jsonResponse(200, [demo], { "x-total-count": "not-a-number" }),
+    ) as unknown as typeof fetch;
+    const client = new ApiClient({ baseUrl: "http://127.0.0.1:9999" });
+    const page = await client.listProjectsPage("B", { limit: 10, offset: 0 });
+    expect(page.items).toEqual([demo]);
+    expect(page.total).toBe(1);
+  });
+});
+
+describe("ApiClient full-project pagination and single-project get", () => {
+  const demoA = { project_id: 1, name: "demo-a", visibility: "private" as const, owner: 1 };
+  const demoB = { project_id: 2, name: "demo-b", visibility: "public" as const, owner: 1 };
+
+  it("fetches a single project by id through the direct endpoint", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(jsonResponse(200, demoB)) as unknown as typeof fetch;
+    const client = new ApiClient({ baseUrl: "http://127.0.0.1:9999" });
+    const project = await client.getProject("B", 2);
+    expect(project).toEqual(demoB);
+    const url = String((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+    expect(url).toContain("/api/v1/projects/2");
+  });
+
+  it("loops pages until X-Total-Count is reached", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(
+        jsonResponse(200, [demoA], { "x-total-count": "2" }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, [demoB], { "x-total-count": "2" }),
+      );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const client = new ApiClient({ baseUrl: "http://127.0.0.1:9999" });
+    const all = await client.listAllProjects("B", 1);
+    expect(all).toEqual([demoA, demoB]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const secondUrl = String(fetchMock.mock.calls[1][0]);
+    expect(secondUrl).toContain("limit=1&offset=1");
+  });
+
+  it("falls back to the first page when X-Total-Count is missing", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(jsonResponse(200, [demoA])) as unknown as typeof fetch;
+    const client = new ApiClient({ baseUrl: "http://127.0.0.1:9999" });
+    const all = await client.listAllProjects("B");
+    expect(all).toEqual([demoA]);
+    expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+  });
+
+  it("clamps the page size to the server limit of 500", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, [demoA], { "x-total-count": "1" }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const client = new ApiClient({ baseUrl: "http://127.0.0.1:9999" });
+    await client.listAllProjects("B", 9999);
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain("limit=500");
+  });
 });

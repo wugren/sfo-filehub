@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "stages": {
+    "design": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/026-upload-authz-body-bounds/design.md": "05fa5d7dbb615643cb12afa653152d593fd16949c6e9cb5900383e21d1f23882",
+        "docs/versions/v0.1/modules/filehub/026-upload-authz-body-bounds/risk-profile.yaml": "13f05b5d6040bcf2e3bb66b744fd184ee9854f8b8a97273d9cb0c209f88574d5"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "243c546ad7ff654f0e7f62f839875ee5ae673b1f1cf7fccba504cd23a76c245c"
+    },
+    "implementation": {
+      "inputs": {},
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "282655f3e8995f1fe8595ab9c22ca9a7789d767fd09f45a79abd97ff58bd1a79"
+    },
+    "proposal": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/026-upload-authz-body-bounds/proposal.md": "437388058d1ee8b41437a54276bdefe954e2894d1675f67a4afcf35f820c1890"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "243c546ad7ff654f0e7f62f839875ee5ae673b1f1cf7fccba504cd23a76c245c"
+    },
+    "testing": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/026-upload-authz-body-bounds/testing.md": "fedf2fcf5dff3aecc7ca4ccc96cf6fd1c6ddefca515c70f3c044bc1986c21861",
+        "docs/versions/v0.1/modules/filehub/026-upload-authz-body-bounds/testplan.yaml": "b6ea4c2805a01b6ba6003e2af43b4538a5e5e4e49785c0d105252e3a3c41a98e"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "282655f3e8995f1fe8595ab9c22ca9a7789d767fd09f45a79abd97ff58bd1a79",
+      "test_run": ".harness/test-results/test-runs/20260824T172924Z-filehub+026-upload-authz-body-bounds-all.json",
+      "test_run_sha256": "afed309903fe6a1ade63390b017fde9158ca794b68e3da8ba88515550c0ea737"
+    }
+  },
+  "task_manifest": "task.yaml"
+}

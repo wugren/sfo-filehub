@@ -24,16 +24,15 @@ pub struct TokenUpdateRequest {
     pub name: Option<String>,
     pub project_scope: Option<ProjectScope>,
     pub scopes: Option<Vec<crate::model::Scope>>,
-    /// None=不修改；Some(None)=改成不过期；Some(Some(t))=新 JWT exp。
-    pub expires_at: Option<Option<DateTime<Utc>>>,
 }
 
 /// token JWT 载荷：token_id 由 jti 冗余携带，解析时二次校验。
+/// 按用户确认，JWT 不携带任何权限属性；scopes/project_scope 由服务端
+/// resolve 阶段从数据库读取。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenPayload {
     pub token_id: TokenId,
     pub user_id: UserId,
-    pub scopes: ScopeSet,
 }
 
 /// tokens::resolve 的结果（认证中间件由此构造 Principal::Token）。
@@ -42,12 +41,14 @@ pub struct TokenPrincipal {
     pub token_id: TokenId,
     pub user_id: UserId,
     pub scopes: ScopeSet,
+    pub project_scope: ProjectScope,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenErrorKind {
     NotFound,
     InvalidInput,
+    Conflict,
     Db,
 }
 
@@ -59,13 +60,28 @@ pub struct TokenError {
 
 impl TokenError {
     pub fn not_found(message: impl Into<String>) -> Self {
-        Self { kind: TokenErrorKind::NotFound, message: message.into() }
+        Self {
+            kind: TokenErrorKind::NotFound,
+            message: message.into(),
+        }
     }
     pub fn invalid_input(message: impl Into<String>) -> Self {
-        Self { kind: TokenErrorKind::InvalidInput, message: message.into() }
+        Self {
+            kind: TokenErrorKind::InvalidInput,
+            message: message.into(),
+        }
+    }
+    pub fn conflict(message: impl Into<String>) -> Self {
+        Self {
+            kind: TokenErrorKind::Conflict,
+            message: message.into(),
+        }
     }
     pub fn db(message: impl Into<String>) -> Self {
-        Self { kind: TokenErrorKind::Db, message: message.into() }
+        Self {
+            kind: TokenErrorKind::Db,
+            message: message.into(),
+        }
     }
 }
 

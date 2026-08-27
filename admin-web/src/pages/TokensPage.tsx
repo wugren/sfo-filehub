@@ -6,7 +6,6 @@ import {
   type Project,
   type ProjectScopeDto,
   type Scope,
-  type TokenIssued,
   type TokenSummary,
   type TokenUpdateInput,
 } from "../api/contract";
@@ -93,10 +92,6 @@ export function scopeError(form: TokenFormState): string | null {
     : "「指定项目」模式至少选择一个项目，或切换为「全部项目」";
 }
 
-function isIssued(token: TokenIssued | TokenSummary): token is TokenIssued {
-  return typeof (token as TokenIssued).jwt === "string";
-}
-
 function scopeLabel(
   scope: ProjectScopeDto,
   projects: Project[],
@@ -131,7 +126,7 @@ export function TokensPage({ client }: { client: ApiClient }): ReactElement {
     try {
       const [tokenList, projectList] = await Promise.all([
         withAuthRetry(sessionStore, (bearer) => client.listTokens(bearer)),
-        withAuthRetry(sessionStore, (bearer) => client.listProjects(bearer)),
+        withAuthRetry(sessionStore, (bearer) => client.listAllProjects(bearer)),
       ]);
       setTokens(tokenList);
       setProjects(projectList);
@@ -166,16 +161,10 @@ export function TokensPage({ client }: { client: ApiClient }): ReactElement {
       project_scope: encodeProjectScope(data.projectScope === "All" ? "all" : data.projectScope),
       scopes: data.scopes,
     };
-    if (data.expiresAt) {
-      patch.expires_at = data.expiresAt;
-    }
-    const result = await withAuthRetry(sessionStore, (bearer) =>
+    await withAuthRetry(sessionStore, (bearer) =>
       client.updateToken(bearer, token.token_id, patch),
     );
     setEditTarget(null);
-    if (isIssued(result)) {
-      setJwtReveal({ jwt: result.jwt, label: t("tokens.jwt.updated") });
-    }
     await load();
   }
 
@@ -189,7 +178,7 @@ export function TokensPage({ client }: { client: ApiClient }): ReactElement {
       );
       setJwtReveal({
         jwt: issued.jwt,
-        label: t("tokens.jwt.rotated", { name: token.name }),
+        label: t("tokens.jwt.resigned", { name: token.name }),
       });
       await load();
     } catch (caught) {
@@ -280,7 +269,7 @@ export function TokensPage({ client }: { client: ApiClient }): ReactElement {
                     </Btn>
                     <Btn size="sm" variant="ghost" disabled={busy} onClick={() => setRotateTarget(token)}>
                       <Icon name="rotate" size={11} />
-                      {t("tokens.rotate")}
+                      {t("tokens.resign")}
                     </Btn>
                     <Btn
                       size="sm"
@@ -333,9 +322,9 @@ export function TokensPage({ client }: { client: ApiClient }): ReactElement {
       )}
       {rotateTarget && (
         <Confirm
-          title={t("tokens.rotateTitle", { name: rotateTarget.name })}
-          body={t("tokens.rotateBody")}
-          confirmLabel={t("tokens.rotateConfirm")}
+          title={t("tokens.resignTitle", { name: rotateTarget.name })}
+          body={t("tokens.resignBody")}
+          confirmLabel={t("tokens.resignConfirm")}
           onConfirm={() => { void rotateToken(rotateTarget); }}
           onCancel={() => setRotateTarget(null)}
           danger={false}
@@ -475,23 +464,24 @@ function TokenFormModal({
               </div>
             )}
           </Field>
-          <Field label={t("tokens.form.expiry")}>
-            <div className="segmented">
-              {EXPIRY_PRESETS.map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  className={expiryPreset === preset ? "active" : undefined}
-                  onClick={() => { setExpiryPreset(preset); setError(""); }}
-                >
-                  {t(EXPIRY_LABEL_KEYS[preset])}
-                </button>
-              ))}
-            </div>
-            {isEdit && (
-              <p className="field-hint mono">{t("tokens.form.expiresAtHint")}</p>
-            )}
-          </Field>
+          {isEdit ? (
+            <p className="field-hint mono">{t("tokens.form.editNoResignHint")}</p>
+          ) : (
+            <Field label={t("tokens.form.expiry")}>
+              <div className="segmented">
+                {EXPIRY_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    className={expiryPreset === preset ? "active" : undefined}
+                    onClick={() => { setExpiryPreset(preset); setError(""); }}
+                  >
+                    {t(EXPIRY_LABEL_KEYS[preset])}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          )}
         </div>
         <div className="form-col">
           <Field label={t("tokens.form.scopes")}>
@@ -532,9 +522,6 @@ function TokenFormModal({
       </div>
 
       {error && <ErrorBanner message={error} onDismiss={() => setError("")} />}
-      {isEdit && (
-        <div className="warn-box mono">{t("tokens.form.resignWarning")}</div>
-      )}
       <div className="modal-actions">
         <Btn variant="outline" onClick={onClose}>{t("common.cancel")}</Btn>
         <Btn disabled={saving} onClick={() => { void handleSave(); }}>

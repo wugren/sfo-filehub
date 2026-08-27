@@ -2,7 +2,7 @@ use std::env;
 use std::path::PathBuf;
 
 use filehub_server::account::store::connect_pool;
-use filehub_server::http::{register_api, AppState};
+use filehub_server::http::{AppState, register_api};
 use filehub_server::model::ServerConfig;
 use sfo_http::actix_server::ActixHttpServer;
 use sfo_http::http_server::HttpServerConfig;
@@ -17,11 +17,24 @@ async fn main() -> Result<(), String> {
     let config_path = env::args()
         .nth(1)
         .or_else(|| env::var("FH_CONFIG").ok())
-        .unwrap_or_else(|| "filehub-server.json".to_string());
+        .unwrap_or_else(|| "filehub-server.yaml".to_string());
     let raw = std::fs::read_to_string(&config_path)
         .map_err(|e| format!("read config {config_path} failed: {e}"))?;
-    let config: ServerConfig = serde_json::from_str(&raw)
-        .map_err(|e| format!("parse config {config_path} failed: {e}"))?;
+    let config: ServerConfig = serde_saphyr::from_str(&raw).map_err(|error| {
+        if let Some(location) = error.location() {
+            format!(
+                "parse config {config_path} failed: invalid YAML at line {}, column {}",
+                location.line(),
+                location.column()
+            )
+        } else {
+            format!("parse config {config_path} failed: invalid YAML")
+        }
+    })?;
+    config
+        .users
+        .validate()
+        .map_err(|e| format!("invalid config: {e}"))?;
 
     let db_path = config.db_path.clone();
     if let Some(parent) = PathBuf::from(&db_path).parent() {
@@ -33,7 +46,10 @@ async fn main() -> Result<(), String> {
         .await
         .map_err(|e| format!("open sqlite failed: {e}"))?;
     let state = AppState::assemble(&config, &db).await?;
-    log::info!("startup gc removed {} orphan files", state.startup_gc().await?.len());
+    log::info!(
+        "startup gc removed {} orphan files",
+        state.startup_gc().await?.len()
+    );
 
     let mut server = ActixHttpServer::new(
         HttpServerConfig::new(config.server.server_addr.clone(), config.server.port)

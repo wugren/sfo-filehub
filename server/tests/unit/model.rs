@@ -1,13 +1,9 @@
-use filehub_server::model::{AccountRole, ProjectRole, Scope, ScopeSet, Visibility};
+use filehub_server::model::{ProjectRole, Scope, ScopeSet, Visibility};
 use std::collections::HashSet;
 use std::str::FromStr;
 
 #[test]
 fn role_parse_round_trips() {
-    assert_eq!(AccountRole::from_str("owner").unwrap(), AccountRole::Owner);
-    assert_eq!(AccountRole::from_str("MEMBER").unwrap(), AccountRole::Member);
-    assert!(AccountRole::from_str("admin").is_err());
-
     for role in [ProjectRole::Read, ProjectRole::Write, ProjectRole::Admin] {
         assert_eq!(ProjectRole::from_str(&role.to_string()).unwrap(), role);
     }
@@ -38,6 +34,9 @@ fn scope_parse_round_trips() {
 #[test]
 fn visibility_parse_round_trips() {
     assert_eq!(Visibility::from_str("public").unwrap(), Visibility::Public);
-    assert_eq!(Visibility::from_str("private").unwrap(), Visibility::Private);
+    assert_eq!(
+        Visibility::from_str("private").unwrap(),
+        Visibility::Private
+    );
     assert!(Visibility::from_str("other").is_err());
 }

@@ -1,0 +1,38 @@
+schema_version: 1
+
+# 用户 2026-08-23 回复「确认，自动完成」，确认采纳修订后提案并确认 high-risk 层级。
+workflow_tier: high-risk
+
+version: v0.1
+packet_module: filehub
+task_name: 025-token-project-scope-enforcement
+stage: acceptance
+mode: manual
+auto_pipeline_start_stage:
+
+proposal: proposal.md
+completion_report: completion-report.md
+change_record: docs/changes/025-token-project-scope-enforcement.md
+design: design.md
+testing: testing.md
+testplan: testplan.yaml
+acceptance_report: acceptance-report.md
+pipeline_plan: pipeline/plan.md
+risk_profile: risk-profile.yaml
+lifecycle_state: lifecycle.json
+changed_paths_file: .harness/evidence/v0.1/stage-scope/025-token-project-scope-enforcement.paths
+baseline_manifest:
+
+changes:
+  - id: fh-token-permissions-server-side
+    target_module: filehub
+    scope_paths: [server/src/tokens/, server/src/model/principal.rs, server/src/http/auth.rs]
+    changed_paths_file:
+  - id: fh-token-project-scope-enforce
+    target_module: filehub
+    scope_paths: [server/src/permissions/checker.rs]
+    changed_paths_file:
+  - id: fh-token-project-scope-tests
+    target_module: filehub
+    scope_paths: [server/tests/unit/, docs/api/v1-contract.md]
+    changed_paths_file:

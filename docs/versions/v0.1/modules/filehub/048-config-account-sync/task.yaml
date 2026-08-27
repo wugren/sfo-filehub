@@ -1,0 +1,42 @@
+schema_version: 1
+
+# 用户 2026-08-26 回复「确认」：确认采纳提案（含会话边界非目标）并接受建议的
+# standard 层级。
+workflow_tier: standard
+
+# Canonical task identity. Other task artifacts reference this file instead of
+# asking agents to repeat these values on checker command lines.
+version: v0.1
+packet_module: filehub
+task_name: 048-config-account-sync
+stage: proposal
+mode: manual
+auto_pipeline_start_stage:
+
+proposal: proposal.md
+completion_report: completion-report.md
+change_record: docs/changes/048-config-account-sync.md
+design: design.md
+testing: testing.md
+testplan: testplan.yaml
+acceptance_report: acceptance-report.md
+pipeline_plan: pipeline/plan.md
+risk_profile: risk-profile.yaml
+lifecycle_state: lifecycle.json
+
+changed_paths_file: .harness/evidence/v0.1/stage-scope/048-config-account-sync.paths
+baseline_manifest: .harness/baselines/v0.1/048-config-account-sync-delivery/manifest.json
+
+changes:
+  - id: fh-account-sync-schema
+    target_module: filehub
+    scope_paths: [server/migrations/0008_accounts_active.sql, server/src/account/store.rs]
+    changed_paths_file:
+  - id: fh-account-sync-seed
+    target_module: filehub
+    scope_paths: [server/src/account/mod.rs]
+    changed_paths_file:
+  - id: fh-account-sync-tests
+    target_module: filehub
+    scope_paths: [server/tests/unit/account.rs]
+    changed_paths_file:

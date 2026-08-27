@@ -60,9 +60,23 @@ impl Display for ProjectScope {
         match self {
             ProjectScope::All => write!(f, "all"),
             ProjectScope::Specified(ids) => {
-                let joined = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+                let joined = ids
+                    .iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
                 write!(f, "{joined}")
             }
+        }
+    }
+}
+
+impl ProjectScope {
+    /// 空项目集合等价于 All：token 可操作其所属用户有权操作的全部项目。
+    pub fn normalize(self) -> Self {
+        match self {
+            ProjectScope::Specified(ids) if ids.is_empty() => ProjectScope::All,
+            other => other,
         }
     }
 }
@@ -80,10 +94,13 @@ impl FromStr for ProjectScope {
             if part.is_empty() {
                 continue;
             }
-            ids.push(ProjectId(part.parse().map_err(|_| format!("invalid project id: {part}"))?));
+            ids.push(ProjectId(
+                part.parse()
+                    .map_err(|_| format!("invalid project id: {part}"))?,
+            ));
         }
         if ids.is_empty() {
-            return Err("empty project scope".to_string());
+            return Ok(ProjectScope::All);
         }
         Ok(ProjectScope::Specified(ids))
     }

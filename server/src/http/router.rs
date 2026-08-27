@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use sfo_http::http_server::{HttpServer, Request, Response};
+use sfo_http::http_server::{Request, Response};
 
 use super::AppState;
 
@@ -14,8 +14,19 @@ where
 {
     let auth = state.auth_provider();
     state.account.register_http::<S, Req, Resp>(server);
-    crate::permissions::http::register::<S, Req, Resp>(server, state.permissions.clone(), auth.clone());
+    crate::permissions::http::register::<S, Req, Resp>(
+        server,
+        state.permissions.clone(),
+        auth.clone(),
+    );
     crate::tokens::http::register::<S, Req, Resp>(server, state.tokens.clone(), auth.clone());
     crate::projects::http::register::<S, Req, Resp>(server, state.projects.clone(), auth.clone());
-    crate::versions::http::register::<S, Req, Resp>(server, state.versions.clone(), state.files.clone(), auth.clone());
+    crate::versions::http::register::<S, Req, Resp>(
+        server,
+        state.versions.clone(),
+        state.files.clone(),
+        auth.clone(),
+        state.permissions.clone(),
+        state.max_archive_bytes,
+    );
 }

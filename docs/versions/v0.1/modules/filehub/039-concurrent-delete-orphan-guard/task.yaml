@@ -1,0 +1,37 @@
+schema_version: 1
+
+workflow_tier: standard
+
+version: v0.1
+packet_module: filehub
+task_name: 039-concurrent-delete-orphan-guard
+stage: proposal
+mode: manual
+auto_pipeline_start_stage:
+
+proposal: proposal.md
+completion_report: completion-report.md
+change_record: docs/changes/039-concurrent-delete-orphan-guard.md
+design: design.md
+testing: testing.md
+testplan: testplan.yaml
+acceptance_report: acceptance-report.md
+pipeline_plan: pipeline/plan.md
+risk_profile: risk-profile.yaml
+lifecycle_state: lifecycle.json
+changed_paths_file: .harness/evidence/v0.1/stage-scope/039-concurrent-delete-orphan-guard.paths
+baseline_manifest: .harness/baselines/v0.1/039-concurrent-delete-orphan-guard-delivery/manifest.json
+
+changes:
+  - id: fh-orphan-fk-cascade
+    target_module: filehub
+    scope_paths: [server/migrations/0003_roles_grants.sql, server/migrations/0006_versions.sql, server/src/account/store.rs]
+    changed_paths_file:
+  - id: fh-orphan-tx-boundary
+    target_module: filehub
+    scope_paths: [server/src/permissions/mod.rs, server/src/permissions/checker.rs, server/src/versions/service.rs]
+    changed_paths_file:
+  - id: fh-orphan-concurrency-tests
+    target_module: filehub
+    scope_paths: [server/tests/unit/projects.rs, server/tests/unit/versions.rs]
+    changed_paths_file:

@@ -115,7 +115,7 @@ classDiagram
 ```rust
 // 接口并发语义（第五次修订）：可能执行 IO（SQLite/物理文件/验签等）的 trait 方法与初始化方法一律 async fn；纯计算保持同步
 // server/src/model/：共享值类型底座（shared，无持久化状态；不依赖任何业务/技术子模块）
-//   UserId/ProjectId/TokenId/FileId、AccountRole/ProjectRole、Scope/ProjectScope/Visibility、
+//   UserId/ProjectId/TokenId/FileId、项目角色 ProjectRole、Scope/ProjectScope/Visibility、
 //   Principal（Anonymous/User/Token）、Resource、CurrentUser/ProjectRecord/VersionRecord/FileRecord/
 //   Collaborator/TokenSummary/TokenIssued，以及 UsersConfig/ServerConfig/FilesConfig/HttpConfigSeed；
 //   供 account/permissions/tokens/storage/versions/projects/http 六个子模块复用，避免 ID/枚举依赖环。
@@ -149,7 +149,7 @@ pub struct CurrentUser { pub id: UserId, pub username: String }
 pub trait PermissionChecker {
     async fn can_access(
         &self,
-        principal: &Principal, // Anonymous / User{id, account_role} / Token{id, scopes, user_id}
+        principal: &Principal, // Anonymous / User{id} / Token{id, scopes, user_id}
         resource: &Resource, // 功能/数据对象（项目、版本、文件）
         action: &str, // metadata:read / artifacts:read|write / administration / projects:create|delete
     ) -> Result<bool, PermissionError>;
@@ -159,10 +159,9 @@ pub trait PermissionChecker {
     async fn update_collaborator(&self, project: &ProjectId, actor: &Principal, user: &UserId, role: ProjectRole) -> Result<(), PermissionError>;
     async fn remove_collaborator(&self, project: &ProjectId, actor: &Principal, user: &UserId) -> Result<(), PermissionError>;
 }
-// 配置驱动角色初始化（[users].role，缺省 member）；访问矩阵冻结于 design/permissions.md
 pub struct PermissionsModule { checker: Arc<dyn PermissionChecker> }
 impl PermissionsModule {
-    pub async fn init(config: &UsersConfig, db: &SqlitePool) -> Result<Self, PermissionInitError>;
+    pub async fn init(db: &SqlitePool, project_access: Arc<dyn ProjectAccess>) -> Result<Self, PermissionInitError>;
     pub fn checker(&self) -> Arc<dyn PermissionChecker>;
 }
 
@@ -333,7 +332,7 @@ stateDiagram-v2
 
 - Owner: 持久化数据按表归属——
   - users：account 模块（实现 `sfo-account` 的 `AccountStore`）；sessions 为 `sfo-account` 签发的无状态 JWT，无服务端 session 表，过期由 JWT `exp` 承载（tokens 归属见下）
-  - account_roles（按 `[users].role` 幂等初始化，缺省 member）/ project_grants（协作者关系，不含 owner）：permissions 模块；项目 owner 为 `projects.owner` 隐式 admin
+  - project_grants（协作者关系，不含 owner）：permissions 模块；项目 owner 为 `projects.owner` 隐式 admin，无账号级角色
   - tokens / token_scopes：tokens 模块；token 记录含 name/scope 快照/当前验签公钥，签名私钥签发后即弃，不保存 JWT 明文与过期字段（过期仅由签发 JWT 的 exp 承载）
   - files 索引（file_id、sha256、size、路径）：files 模块；物理字节位于 `data_dir`
   - versions / version_files 关联：versions 模块
@@ -433,9 +432,9 @@ stateDiagram-v2
 - token 过期策略：token 本身无过期时间，过期只存在于每个签发 JWT 的 `exp` 声明；签发（create/update/rotate）时服务端校验「不过期或最长 1 年」并写入 `exp`，resolve 只基于 JWT `exp` 判定过期，token 记录与 TokenSummary 均不携带过期字段。
 - 会话校验状态归属（第四次修订）：签名/解码密钥与会话配置由 `sfo-account` 的 `DefaultAccountManager` 持有；`AccountModule` 只持有该 manager 并作薄适配，不保留独立校验器对象。
 - 匿名访问（本轮补齐）：认证中间件无凭据时构造 `Principal::Anonymous`；访问矩阵（冻结于 `design/permissions.md`）定义 public 只读放行与 private/写动作 deny，杜绝 public/private 边界的自拼装分支。
-- 访问矩阵（本轮补齐）：动作常量（metadata/artifacts/administration/projects:create|delete）、账号级与项目级判定表冻结于 `design/permissions.md`；token 二次限制 = 用户权限 ∩ token scope 快照。
-- 角色初始化（本轮补齐）：`[users]` 每项可选 `role = "owner"|"member"`（缺省 member，fail-closed）；roles 幂等 upsert 归 `PermissionsModule::init`，account 不接触角色数据。
-- 项目 owner（本轮补齐）：`projects.owner` 为隐式 admin，不需写入 project_grants；协作者管理/可见性切换要求 owner 或 admin 协作者；项目删除按提案仍由账号级 `projects:delete` 控制。
+- 访问矩阵（本轮补齐 + 035 修订）：动作常量（metadata/artifacts/administration/projects:create、项目级 projects:delete）、账号能力与项目级判定表冻结于 `design/permissions.md`；token 二次限制 = 用户权限 ∩ token scope 快照；无账号级 owner/member。
+- 项目 owner（本轮补齐）：`projects.owner` 为隐式 admin，不需写入 project_grants；协作者管理/可见性切换要求 owner 或 admin 协作者；项目删除为项目级动作（见下 035 修订）。
+- 项目删除（035 修订）：`projects:delete` 为项目级动作，仅项目 owner 可删；admin 协作者不可删；token 需同时携带 `projects:delete` 与 `administration` scope 且所属用户为目标项目 owner。
 - 发布失败清理（本轮补齐）：`http` 发布分支在 `publish` 失败（含 409）时调用 `files.discard(file_id)`；启动时 `versions.referenced_file_ids()` + `files.gc_orphans(keep)` 回收中断残留；"引用计数" = 版本引用集合，不新增计数表。
 - 归档约束（本轮补齐）：ingest 流式校验 gzip magic + tar 结构（仅 `.tar.gz`）、`[files] max_archive_bytes` 超限拒绝（422）；对应需求"统一 .tar.gz、不支持其它格式"与风险项"目录打包上限按部署配置"。
 - http 装配（本轮补齐 + 第六次修订）：`ServerConfig`（sfo-http 监听/CORS、users、files）由 main.rs 装载；`design/http.md` 冻结 v1 路由表、DTO、错误映射与 002/003 消费映射；`docs/api/v1-contract.md` 在 I-008 从冻结表落盘，不再新增端点。

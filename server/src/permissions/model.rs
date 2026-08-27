@@ -4,10 +4,10 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 use async_trait::async_trait;
-use sqlx::sqlite::SqliteRow;
 use sqlx::Row;
+use sqlx::sqlite::SqliteRow;
 
-use crate::model::{AccountRole, ProjectId, ProjectRecord, ProjectRole, UserId};
+use crate::model::{ProjectId, ProjectRecord, ProjectRole, UserId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PermissionErrorKind {
@@ -24,13 +24,22 @@ pub struct PermissionError {
 
 impl PermissionError {
     pub fn db(message: impl Into<String>) -> Self {
-        Self { kind: PermissionErrorKind::Db, message: message.into() }
+        Self {
+            kind: PermissionErrorKind::Db,
+            message: message.into(),
+        }
     }
     pub fn not_found(message: impl Into<String>) -> Self {
-        Self { kind: PermissionErrorKind::NotFound, message: message.into() }
+        Self {
+            kind: PermissionErrorKind::NotFound,
+            message: message.into(),
+        }
     }
     pub fn forbidden(message: impl Into<String>) -> Self {
-        Self { kind: PermissionErrorKind::Forbidden, message: message.into() }
+        Self {
+            kind: PermissionErrorKind::Forbidden,
+            message: message.into(),
+        }
     }
 }
 
@@ -62,22 +71,9 @@ pub(crate) fn row_to_project(row: &SqliteRow) -> Result<ProjectRecord, sqlx::Err
     Ok(ProjectRecord {
         project_id: ProjectId(row.try_get::<i64, _>("id")?),
         name: row.try_get::<String, _>("name")?,
-        visibility: visibility.parse().map_err(|e: String| sqlx::Error::Decode(Box::new(std::io::Error::other(e))))?,
+        visibility: visibility
+            .parse()
+            .map_err(|e: String| sqlx::Error::Decode(Box::new(std::io::Error::other(e))))?,
         owner: UserId(row.try_get::<i64, _>("owner_id")?),
     })
-}
-
-pub(crate) fn parse_role<T>(value: &str) -> Result<T, String>
-where
-    T: std::str::FromStr<Err = String>,
-{
-    value.parse()
-}
-
-pub(crate) fn parse_project_role(value: &str) -> Result<ProjectRole, String> {
-    parse_role(value)
-}
-
-pub(crate) fn parse_account_role(value: &str) -> Result<AccountRole, String> {
-    parse_role(value)
 }

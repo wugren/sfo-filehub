@@ -117,7 +117,7 @@ describe("ProjectDetailPage version tables", () => {
   it("keeps columns consistent and shows the complete SHA-256", async () => {
     await authenticate();
     const client = {
-      listProjects: vi.fn().mockResolvedValue([project]),
+      getProject: vi.fn().mockResolvedValue(project),
       listVersions: vi.fn().mockResolvedValue(versions),
     } as unknown as ApiClient;
 
@@ -138,7 +138,7 @@ describe("ProjectDetailPage version tables", () => {
   it("copies the full SHA-256 and shows success feedback", async () => {
     await authenticate();
     const client = {
-      listProjects: vi.fn().mockResolvedValue([project]),
+      getProject: vi.fn().mockResolvedValue(project),
       listVersions: vi.fn().mockResolvedValue(versions),
     } as unknown as ApiClient;
     renderDetail(client);
@@ -158,7 +158,7 @@ describe("ProjectDetailPage version tables", () => {
   it("reserves the delete slot so locked and unlocked downloads align", async () => {
     await authenticate();
     const client = {
-      listProjects: vi.fn().mockResolvedValue([project]),
+      getProject: vi.fn().mockResolvedValue(project),
       listVersions: vi.fn().mockResolvedValue([
         versions[0],
         { ...versions[1], locked_at: "2026-08-21T01:00:00Z" },

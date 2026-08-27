@@ -2,11 +2,11 @@
 //! 不自写 login/session/refresh handler，也不定义 SessionService。
 
 use sfo_account::AccountServer;
-use sfo_http::http_server::{HttpServer, Request, Response};
+use sfo_http::http_server::{Request, Response};
 
 use super::{AccountModule, FilehubAccount, SqliteAccountStore};
-use std::sync::Arc;
 use sfo_account::DefaultAccountManager;
+use std::sync::Arc;
 
 impl AccountModule {
     /// 直接导出 sfo-account 的 HTTP 接口：
@@ -20,12 +20,13 @@ impl AccountModule {
     {
         let manager: Arc<DefaultAccountManager<FilehubAccount, SqliteAccountStore>> =
             self.manager.clone();
-        AccountServer::register_server::<
+        let login_rate_limiter = self.login_rate_limiter.clone();
+        AccountServer::register_server_with_login_rate_limiter::<
             FilehubAccount,
             DefaultAccountManager<FilehubAccount, SqliteAccountStore>,
             Req,
             Resp,
             S,
-        >(server, manager);
+        >(server, manager, login_rate_limiter);
     }
 }

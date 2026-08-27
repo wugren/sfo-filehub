@@ -1,0 +1,62 @@
+# HTTP 服务监听与 CORS 配置。
+server:
+  # 监听地址（必填）。设为 0.0.0.0 可监听所有网络接口。
+  server_addr: "0.0.0.0"
+
+  # HTTP 监听端口（必填）。
+  port: 8080
+
+  # 允许跨域访问的来源列表；默认不允许任何跨域来源。
+  # allow_origins: []
+
+  # 允许跨域请求使用的方法列表；默认为空。
+  # allow_methods: []
+
+  # 允许跨域请求携带的请求头列表；默认为空。
+  # allow_headers: []
+
+  # 允许浏览器读取的响应头列表；默认为空。
+  # expose_headers: []
+
+  # CORS 预检结果的缓存时间（秒）；默认 3600。
+  # max_age: 3600
+
+  # 是否允许跨域请求携带凭据；默认 false。
+  # support_credentials: false
+
+  # 每个来源每分钟允许的登录尝试次数，0 表示关闭；默认 30。
+  # login_rate_limit_per_minute: 30
+
+  # 登录限流统计窗口（秒）；默认 60。
+  # login_rate_limit_window_secs: 60
+
+# 初始账号与 EdDSA（Ed25519）会话签名配置。
+users:
+  # 会话签名私钥（必填），必须是 Ed25519 PKCS#8 PEM；公钥由服务端自动派生。
+  # 可用 `openssl genpkey -algorithm Ed25519` 生成；下面仅为示例密钥，生产必须替换。
+  session_private_key: |
+    -----BEGIN PRIVATE KEY-----
+    MC4CAQAwBQYDK2VwBCIEIJGVLyTXHTLSMPclke6+1xCFTfX+TmVRcs6UNiMW35Ok
+    -----END PRIVATE KEY-----
+
+  # 配置驱动的账号列表（必填）。每个账号必须提供 password 或 password_hash。
+  users:
+    - # 登录用户名（必填）。
+      username: "admin"
+
+      # 明文初始密码；生产部署前必须替换。与 password_hash 二选一。
+      password: "change-me"
+
+      # bcrypt 密码哈希替代项；使用时请注释掉上面的 password。
+      # password_hash: "$2b$12$replace-with-a-complete-bcrypt-hash"
+
+# 文件归档存储配置。
+files:
+  # 归档文件保存目录（必填）。
+  data_dir: "./data/files"
+
+  # 单个上传归档允许的最大字节数（必填）。
+  max_archive_bytes: 104857600
+
+# SQLite 数据库路径；默认使用当前工作目录下的 filehub.db。
+# db_path: "filehub.db"

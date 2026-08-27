@@ -17,19 +17,34 @@ pub struct ProjectError {
 
 impl ProjectError {
     pub fn not_found(message: impl Into<String>) -> Self {
-        Self { kind: ProjectErrorKind::NotFound, message: message.into() }
+        Self {
+            kind: ProjectErrorKind::NotFound,
+            message: message.into(),
+        }
     }
     pub fn forbidden(message: impl Into<String>) -> Self {
-        Self { kind: ProjectErrorKind::Forbidden, message: message.into() }
+        Self {
+            kind: ProjectErrorKind::Forbidden,
+            message: message.into(),
+        }
     }
     pub fn conflict(message: impl Into<String>) -> Self {
-        Self { kind: ProjectErrorKind::Conflict, message: message.into() }
+        Self {
+            kind: ProjectErrorKind::Conflict,
+            message: message.into(),
+        }
     }
     pub fn invalid_input(message: impl Into<String>) -> Self {
-        Self { kind: ProjectErrorKind::InvalidInput, message: message.into() }
+        Self {
+            kind: ProjectErrorKind::InvalidInput,
+            message: message.into(),
+        }
     }
     pub fn db(message: impl Into<String>) -> Self {
-        Self { kind: ProjectErrorKind::Db, message: message.into() }
+        Self {
+            kind: ProjectErrorKind::Db,
+            message: message.into(),
+        }
     }
 }
 

@@ -48,8 +48,9 @@ impl From<io::Error> for ArchiveError {
 
 /// 把单个文件或目录打包为安全 `.tar.gz`，返回临时归档 + SHA-256 + 大小。
 pub fn pack_tar_gz(source: &Path) -> Result<PackedArchive, ArchiveError> {
-    let metadata = fs::metadata(source)
-        .map_err(|e| ArchiveError::LocalFs(format!("读取待发布路径 {} 失败：{e}", source.display())))?;
+    let metadata = fs::metadata(source).map_err(|e| {
+        ArchiveError::LocalFs(format!("读取待发布路径 {} 失败：{e}", source.display()))
+    })?;
     if !metadata.is_dir() && !metadata.is_file() {
         return Err(ArchiveError::Unsupported(format!(
             "{} 不是普通文件或目录，无法发布",
@@ -63,7 +64,11 @@ pub fn pack_tar_gz(source: &Path) -> Result<PackedArchive, ArchiveError> {
         pack_single_file(source, &tmp)?;
     }
     let (sha256, size) = hash_file(&tmp)?;
-    Ok(PackedArchive { path: tmp, sha256, size })
+    Ok(PackedArchive {
+        path: tmp,
+        sha256,
+        size,
+    })
 }
 
 /// 生成净化后的下载文件名 `<project>-<version>.tar.gz`。
@@ -93,7 +98,9 @@ pub fn sanitize_artifact_name(project: &str, version: &str) -> Result<String, Ar
         }
     }
     if name.len() > 255 || name.is_empty() {
-        return Err(ArchiveError::Unsupported("生成下载文件名失败：项目/版本净化后仍超长".to_string()));
+        return Err(ArchiveError::Unsupported(
+            "生成下载文件名失败：项目/版本净化后仍超长".to_string(),
+        ));
     }
     Ok(name)
 }
@@ -148,7 +155,10 @@ pub fn temp_archive_path() -> Result<PathBuf, ArchiveError> {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or_default();
-    Ok(std::env::temp_dir().join(format!("filehub-pack-{}-{nanos}.tar.gz", std::process::id())))
+    Ok(std::env::temp_dir().join(format!(
+        "filehub-pack-{}-{nanos}.tar.gz",
+        std::process::id()
+    )))
 }
 
 fn hash_file(path: &Path) -> Result<(String, u64), ArchiveError> {
@@ -197,9 +207,8 @@ fn sanitize_segment(value: &str, fallback: &str) -> String {
 fn avoid_reserved(value: &str) -> String {
     let stem = value.split('.').next().unwrap_or("").to_ascii_uppercase();
     let reserved = [
-        "CON", "PRN", "AUX", "NUL",
-        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
     ];
     if reserved.contains(&stem.as_str()) {
         format!("_{value}")
@@ -225,8 +234,20 @@ mod tests {
 
     #[test]
     fn reserved_names_are_escaped() {
-        assert!(sanitize_artifact_name("CON", "v1").unwrap().starts_with("_"));
-        assert!(sanitize_artifact_name("NUL", "v1").unwrap().starts_with("_"));
-        assert!(sanitize_artifact_name("demo", "v1").unwrap().starts_with("demo"));
+        assert!(
+            sanitize_artifact_name("CON", "v1")
+                .unwrap()
+                .starts_with("_")
+        );
+        assert!(
+            sanitize_artifact_name("NUL", "v1")
+                .unwrap()
+                .starts_with("_")
+        );
+        assert!(
+            sanitize_artifact_name("demo", "v1")
+                .unwrap()
+                .starts_with("demo")
+        );
     }
 }

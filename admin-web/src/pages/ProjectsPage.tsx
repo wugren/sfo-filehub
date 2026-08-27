@@ -17,23 +17,33 @@ import { useT } from "../i18n";
 import { statusMessage } from "./LoginPage";
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/;
+const PROJECT_PAGE_SIZE = 10;
 
 export function ProjectsPage({ client }: { client: ApiClient }): ReactElement {
   const t = useT();
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [visTarget, setVisTarget] = useState<Project | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (targetPage: number) => {
     setBusy(true);
     setError("");
     try {
-      const list = await withAuthRetry(sessionStore, (bearer) => client.listProjects(bearer));
-      setProjects(list);
+      const result = await withAuthRetry(sessionStore, (bearer) =>
+        client.listProjectsPage(bearer, {
+          limit: PROJECT_PAGE_SIZE,
+          offset: (targetPage - 1) * PROJECT_PAGE_SIZE,
+        }),
+      );
+      setProjects(result.items);
+      setTotal(result.total);
+      setPage(targetPage);
     } catch (caught) {
       setError(statusMessage(caught));
     } finally {
@@ -42,8 +52,10 @@ export function ProjectsPage({ client }: { client: ApiClient }): ReactElement {
   }, [client]);
 
   useEffect(() => {
-    void load();
+    void load(1);
   }, [load]);
+
+  const pages = Math.max(1, Math.ceil(total / PROJECT_PAGE_SIZE));
 
   async function onCreate(name: string, visibility: Visibility): Promise<void> {
     setBusy(true);
@@ -53,7 +65,8 @@ export function ProjectsPage({ client }: { client: ApiClient }): ReactElement {
         client.createProject(bearer, name.trim(), visibility),
       );
       setShowCreate(false);
-      await load();
+      const lastPage = Math.max(1, Math.ceil((total + 1) / PROJECT_PAGE_SIZE));
+      await load(lastPage);
     } catch (caught) {
       setError(statusMessage(caught));
     } finally {
@@ -67,7 +80,8 @@ export function ProjectsPage({ client }: { client: ApiClient }): ReactElement {
     setDeleteTarget(null);
     try {
       await withAuthRetry(sessionStore, (bearer) => client.deleteProject(bearer, project.project_id));
-      await load();
+      const nextPage = projects.length === 1 && page > 1 ? page - 1 : page;
+      await load(nextPage);
     } catch (caught) {
       setError(statusMessage(caught));
     } finally {
@@ -84,7 +98,7 @@ export function ProjectsPage({ client }: { client: ApiClient }): ReactElement {
       await withAuthRetry(sessionStore, (bearer) =>
         client.setVisibility(bearer, project.project_id, next),
       );
-      await load();
+      await load(page);
     } catch (caught) {
       setError(statusMessage(caught));
     } finally {
@@ -97,7 +111,7 @@ export function ProjectsPage({ client }: { client: ApiClient }): ReactElement {
       <div className="page-head">
         <div className="page-title">
           <h1>{t("projects.title")}</h1>
-          <span className="count-badge">{projects.length}</span>
+          <span className="count-badge">{total}</span>
         </div>
         <Btn size="sm" onClick={() => setShowCreate(true)}>
           <Icon name="plus" size={13} />
@@ -174,6 +188,32 @@ export function ProjectsPage({ client }: { client: ApiClient }): ReactElement {
           </tbody>
         </table>
       </div>
+
+      {total > 0 && (
+        <div className="page-pad-vertical pager">
+          <span className="pager-info">
+            {t("projects.pageInfo", { page, pages, total })}
+          </span>
+          <div className="row-actions">
+            <Btn
+              size="sm"
+              variant="outline"
+              disabled={busy || page <= 1}
+              onClick={() => { void load(page - 1); }}
+            >
+              {t("projects.prevPage")}
+            </Btn>
+            <Btn
+              size="sm"
+              variant="outline"
+              disabled={busy || page >= pages}
+              onClick={() => { void load(page + 1); }}
+            >
+              {t("projects.nextPage")}
+            </Btn>
+          </div>
+        </div>
+      )}
 
       {showCreate && (
         <CreateProjectModal

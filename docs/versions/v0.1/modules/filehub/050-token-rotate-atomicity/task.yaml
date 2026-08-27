@@ -1,0 +1,38 @@
+schema_version: 1
+
+# 用户 2026-08-26 回复「确认」：确认采纳提案并接受建议的 standard 层级。
+workflow_tier: standard
+
+version: v0.1
+packet_module: filehub
+task_name: 050-token-rotate-atomicity
+stage: proposal
+mode: manual
+auto_pipeline_start_stage:
+
+proposal: proposal.md
+completion_report: completion-report.md
+change_record: docs/changes/050-token-rotate-atomicity.md
+design: design.md
+testing: testing.md
+testplan: testplan.yaml
+acceptance_report: acceptance-report.md
+pipeline_plan: pipeline/plan.md
+risk_profile: risk-profile.yaml
+lifecycle_state: lifecycle.json
+changed_paths_file: .harness/evidence/v0.1/stage-scope/050-token-rotate-atomicity.paths
+baseline_manifest: .harness/baselines/v0.1/050-token-rotate-atomicity-delivery/manifest.json
+
+changes:
+  - id: fh-token-rotate-tx-cas
+    target_module: filehub
+    scope_paths: [server/src/tokens/service.rs, server/src/tokens/model.rs, server/src/tokens/http.rs]
+    changed_paths_file:
+  - id: fh-token-rotate-contract
+    target_module: filehub
+    scope_paths: [docs/api/v1-contract.md]
+    changed_paths_file:
+  - id: fh-token-rotate-tests
+    target_module: filehub
+    scope_paths: [server/tests/unit/tokens.rs]
+    changed_paths_file:

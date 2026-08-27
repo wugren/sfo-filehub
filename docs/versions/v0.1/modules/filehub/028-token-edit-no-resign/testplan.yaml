@@ -1,0 +1,105 @@
+schema_version: 1
+# filehub token 属性修改去自动重签测试计划（028-token-edit-no-resign）
+task_manifest: task.yaml
+risk_profile: risk-profile.yaml
+api_impact:
+  public_api: breaking
+  crate_root_export_change: false
+  build_surface_change: false
+  documentation_examples_affected: true
+evidence_inputs: ["server/src", "server/tests", "admin-web/src", "admin-web/tests", "docs/api/v1-contract.md"]
+contract_checks:
+  mode: enabled
+  steps:
+    - id: contract-external-positive
+      name: new paths compile (server lib/bins + admin-web tsc/vite)
+      kind: external-positive
+      assertion: new-path-compiles
+      change_ids: ["fh-token-update-no-resign", "fh-token-explicit-resign-action", "fh-token-no-resign-regression-tests"]
+      run: ["bash", "docs/versions/v0.1/modules/filehub/028-token-edit-no-resign/testing/external-positive.sh"]
+    - id: contract-external-negative
+      name: removed TokenUpdateInput.expires_at rejected by compiler
+      kind: external-negative
+      assertion: old-path-rejected-for-removed-symbol
+      change_ids: ["fh-token-update-no-resign", "fh-token-explicit-resign-action", "fh-token-no-resign-regression-tests"]
+      run: ["bash", "docs/versions/v0.1/modules/filehub/028-token-edit-no-resign/testing/negative-token-update-expires-at.sh"]
+    - id: contract-removed-symbol-scan
+      name: no unallowlisted removed token update symbols
+      kind: removed-symbol-scan
+      assertion: no-unallowlisted-old-symbol-references
+      change_ids: ["fh-token-update-no-resign", "fh-token-explicit-resign-action", "fh-token-no-resign-regression-tests"]
+      run: ["python3", "harness/scripts/consumer-closure-check.py", "--version", "v0.1", "--module", "filehub", "--task-name", "028-token-edit-no-resign"]
+    - id: contract-repository-compile-closure
+      name: workspace Rust consumers compile
+      kind: repository-compile-closure
+      assertion: repository-consumers-compile
+      change_ids: ["fh-token-update-no-resign", "fh-token-explicit-resign-action", "fh-token-no-resign-regression-tests"]
+      run: ["cargo", "test", "--workspace", "--no-run", "--all-targets"]
+    - id: contract-documentation-examples
+      name: rustdoc compile closure
+      kind: documentation-examples
+      assertion: documentation-examples-compile
+      change_ids: ["fh-token-update-no-resign", "fh-token-explicit-resign-action", "fh-token-no-resign-regression-tests"]
+      run: ["cargo", "test", "--manifest-path", "server/Cargo.toml", "--doc"]
+defaults:
+  workdir: .
+  timeout_sec: 900
+  env:
+    CARGO_HOME: .harness/cargo-home
+    CARGO_TARGET_DIR: .harness/cargo-target
+levels:
+  unit:
+    mode: enabled
+    summary: 单元测试：update 去重签回归 + 管理端编辑/重签交互
+    test_targets:
+      - server/tests/unit
+      - admin-web/tests/unit
+    preconditions:
+      tools: ["cargo", "npm"]
+      env: []
+      services: []
+      notes: []
+    steps:
+      - id: token-update-no-resign-unit
+        name: run filehub-server unit tests
+        change_ids: ["fh-token-update-no-resign", "fh-token-no-resign-regression-tests"]
+        run: ["cargo", "test", "--manifest-path", "server/Cargo.toml", "--test", "unit_tests"]
+      - id: token-resign-ui-unit
+        name: run admin-web unit tests
+        change_ids: ["fh-token-update-no-resign", "fh-token-explicit-resign-action", "fh-token-no-resign-regression-tests"]
+        run: ["npm", "run", "test:unit", "--prefix", "admin-web"]
+  dv:
+    mode: enabled
+    summary: DV：token 生命周期与持久化回归
+    test_targets:
+      - server/tests/dv_tests.rs
+    preconditions:
+      tools: ["cargo"]
+      env: []
+      services: []
+      notes: []
+    steps:
+      - id: token-update-no-resign-dv
+        name: run filehub-server DV tests
+        change_ids: ["fh-token-update-no-resign", "fh-token-no-resign-regression-tests"]
+        run: ["cargo", "test", "--manifest-path", "server/Cargo.toml", "--test", "dv_tests"]
+  integration:
+    mode: enabled
+    summary: 集成：HTTP token 契约与前端契约回归
+    test_targets:
+      - server/tests/api_integration.rs
+      - admin-web/tests/integration
+    preconditions:
+      tools: ["cargo", "npm"]
+      env: []
+      services: []
+      notes: []
+    steps:
+      - id: token-update-no-resign-integration
+        name: run filehub-server API integration tests
+        change_ids: ["fh-token-update-no-resign", "fh-token-explicit-resign-action", "fh-token-no-resign-regression-tests"]
+        run: ["cargo", "test", "--manifest-path", "server/Cargo.toml", "--test", "api_integration"]
+      - id: token-resign-ui-integration
+        name: run admin-web integration contract tests
+        change_ids: ["fh-token-update-no-resign", "fh-token-explicit-resign-action", "fh-token-no-resign-regression-tests"]
+        run: ["npm", "run", "test:integration", "--prefix", "admin-web"]

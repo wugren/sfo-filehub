@@ -1,0 +1,64 @@
+schema_version: 1
+task_manifest: task.yaml
+
+# `risk-profile-check.py --prepare` 会刷新下列 task/change 与源码绑定；
+# 提案/设计变更后必须重新 prepare 并复核七类判定。
+change_ids: ["fh-upload-authz-gate", "fh-http-body-limit", "fh-upload-size-and-decompression-bounds", "fh-upload-security-tests"]
+source_bindings:
+  proposal: proposal.md
+  design_source: design.md
+
+risks:
+  contract:
+    applies: true
+    evidence:
+      - docs/api/v1-contract.md
+      - docs/versions/v0.1/modules/filehub/001-filehub-core-platform/design/http.md
+    required_checks:
+      - 上传接口的 401/403/422 错误码与响应 JSON 形状保持不变
+      - 上传大小上限（max_archive_bytes）与解压上限（max_decompressed_bytes）语义在契约文档与设计文档中冻结
+      - 流式 multipart 仍接受标准 multipart/form-data（file + 可选 sha256 字段），客户端契约不变
+  data:
+    applies: true
+    evidence:
+      - server/src/storage/
+    required_checks:
+      - 文件入库保持 temp -> fsync -> rename 原子落位，失败/中断路径清理临时文件
+      - 入库文件 sha256/size 与物理字节一致；版本引用与孤儿回收语义不回归
+  security:
+    applies: true
+    evidence:
+      - server/src/versions/http.rs
+      - server/src/http/auth.rs
+      - server/src/storage/integrity.rs
+      - third_party 依赖升级说明（sfo-http 0.8）
+    required_checks:
+      - PUT 上传在读取 body 前完成 Project + artifacts:write 判定（匿名 401、越权 403）
+      - 请求体流式读取：file part 实时计数，超过 max_archive_bytes 即终止，无整包内存累积
+      - gzip 解压总量有上限（max_decompressed_bytes），压缩炸弹被拒绝且不落库
+      - 非 file 分片/头部/总开销设小上限，不信任 Content-Length 之外的无界输入
+  runtime:
+    applies: true
+    evidence:
+      - server/src/versions/upload.rs
+      - server/src/storage/store.rs
+    required_checks:
+      - 增量 multipart 解析正确处理 boundary 跨 chunk、流错误、连接中断与结束标记
+      - 流式写入失败时删除临时文件，不产生可见半成品或孤儿文件
+      - 多并发上传相互独立，无共享可变状态；下载/GC 行为不回归
+  build:
+    applies: true
+    evidence:
+      - server/Cargo.toml
+      - Cargo.lock
+    required_checks:
+      - sfo-http 升级到 0.8（crates.io），全量编译迁移通过；新增 http-body-util/bytes 等直接依赖来源与版本锁定可复现
+      - 不引入未说明的特性开关或后端切换（仍仅 actix-web）
+  ui:
+    applies: false
+    evidence: 不修改 admin-web/CLI 的界面与交互行为；multipart 请求由既有客户端契约生成
+    required_checks: []
+  harness:
+    applies: false
+    evidence: 本任务不修改 Harness 规则、检查器或测试基础设施；仅按既有生命周期命令推进
+    required_checks: []

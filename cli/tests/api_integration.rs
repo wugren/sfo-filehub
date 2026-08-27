@@ -35,6 +35,7 @@ async fn login_password(env: &TestEnv, server: &str) {
 
 #[tokio::test]
 async fn login_password_persists_session_and_logout_clears() {
+    common::log_case("login_password_persists_session_and_logout_clears");
     let _guard = common::lock_env();
     let server = MockServer::start(Mode::Normal, common::make_payload("login")).await;
     let env = TestEnv::new();
@@ -65,6 +66,7 @@ async fn login_password_persists_session_and_logout_clears() {
 
 #[tokio::test]
 async fn login_without_scheme_stores_identity_credential() {
+    common::log_case("login_without_scheme_stores_identity_credential");
     let _guard = common::lock_env();
     let server = MockServer::start(Mode::Normal, common::make_payload("login-noscheme")).await;
     let env = TestEnv::new();
@@ -83,6 +85,7 @@ async fn login_without_scheme_stores_identity_credential() {
 
 #[tokio::test]
 async fn legacy_http_credential_matches_no_scheme_push() {
+    common::log_case("legacy_http_credential_matches_no_scheme_push");
     let _guard = common::lock_env();
     let server = MockServer::start(Mode::Normal, common::make_payload("legacy-push")).await;
     let env = TestEnv::new();
@@ -113,6 +116,7 @@ async fn legacy_http_credential_matches_no_scheme_push() {
 
 #[tokio::test]
 async fn no_scheme_login_and_push_workflow() {
+    common::log_case("no_scheme_login_and_push_workflow");
     let _guard = common::lock_env();
     let server = MockServer::start(Mode::Normal, common::make_payload("noscheme-full")).await;
     let env = TestEnv::new();
@@ -134,6 +138,7 @@ async fn no_scheme_login_and_push_workflow() {
 
 #[tokio::test]
 async fn login_bad_password_fails_and_writes_nothing() {
+    common::log_case("login_bad_password_fails_and_writes_nothing");
     let _guard = common::lock_env();
     let server = MockServer::start(Mode::Normal, common::make_payload("bad")).await;
     let env = TestEnv::new();
@@ -160,6 +165,7 @@ async fn login_bad_password_fails_and_writes_nothing() {
 
 #[tokio::test]
 async fn login_mode_conflict_is_usage_error() {
+    common::log_case("login_mode_conflict_is_usage_error");
     let _guard = common::lock_env();
     let server = MockServer::start(Mode::Normal, common::make_payload("conflict")).await;
     let env = TestEnv::new();
@@ -179,6 +185,7 @@ async fn login_mode_conflict_is_usage_error() {
 
 #[tokio::test]
 async fn token_login_validates_before_persisting() {
+    common::log_case("token_login_validates_before_persisting");
     let _guard = common::lock_env();
     let server = MockServer::start(Mode::Normal, common::make_payload("token")).await;
     let env = TestEnv::new();
@@ -209,6 +216,7 @@ async fn token_login_validates_before_persisting() {
 
 #[tokio::test]
 async fn versions_outputs_json_and_text_files() {
+    common::log_case("versions_outputs_json_and_text_files");
     let _guard = common::lock_env();
     let server = MockServer::start(Mode::Normal, common::make_payload("versions")).await;
     let env = TestEnv::new();
@@ -249,7 +257,60 @@ async fn versions_outputs_json_and_text_files() {
 }
 
 #[tokio::test]
+async fn resolve_project_scans_paginated_projects_beyond_first_page() {
+    common::log_case("resolve_project_scans_paginated_projects_beyond_first_page");
+    let _guard = common::lock_env();
+    let server = MockServer::start(Mode::Normal, common::make_payload("paged")).await;
+    let env = TestEnv::new();
+    unsafe {
+        std::env::set_var("FILEHUB_TOKEN", "tok-paged");
+    }
+    let code = login_handler::run_login(
+        Some(&env.config),
+        LoginArgs {
+            server: Some(server.base.clone()),
+            username: None,
+            password_stdin: false,
+            token_stdin: false,
+        },
+    )
+    .await
+    .expect("token login validates against first page");
+    assert_eq!(code, 0);
+    unsafe {
+        std::env::remove_var("FILEHUB_TOKEN");
+    }
+
+    // 520 个项目、CLI 500/页：`pg-520` 在第 2 页，必须能被按名解析。
+    let code = versions_handler::run(
+        Some(&env.config),
+        VersionsArgs {
+            target: format!("{}/pg-520", server.base),
+            output: None,
+            format: "text".to_string(),
+        },
+    )
+    .await
+    .expect("resolve project on second page");
+    assert_eq!(code, 0);
+
+    // 不存在项目仍按既有语义报 InvalidInput。
+    let error = versions_handler::run(
+        Some(&env.config),
+        VersionsArgs {
+            target: format!("{}/missing-pg", server.base),
+            output: None,
+            format: "text".to_string(),
+        },
+    )
+    .await
+    .expect_err("missing project name rejects");
+    assert_eq!(error.exit_code(), 5);
+}
+
+#[tokio::test]
 async fn push_success_conflict_and_forbidden() {
+    common::log_case("push_success_conflict_and_forbidden");
     let _guard = common::lock_env();
     let server = MockServer::start(Mode::Normal, common::make_payload("publish")).await;
     let env = TestEnv::new();
@@ -318,6 +379,7 @@ async fn push_success_conflict_and_forbidden() {
 
 #[tokio::test]
 async fn pull_verifies_sha_and_rejects_corrupt_body() {
+    common::log_case("pull_verifies_sha_and_rejects_corrupt_body");
     let _guard = common::lock_env();
     let server = MockServer::start(Mode::Normal, common::make_payload("download")).await;
     let env = TestEnv::new();
@@ -356,6 +418,7 @@ async fn pull_verifies_sha_and_rejects_corrupt_body() {
 
 #[tokio::test]
 async fn pull_rejects_directory_target() {
+    common::log_case("pull_rejects_directory_target");
     let _guard = common::lock_env();
     let server = MockServer::start(Mode::Normal, common::make_payload("pull-dir")).await;
     let env = TestEnv::new();
@@ -383,6 +446,7 @@ fn server_payload_sha() -> String {
 
 #[tokio::test]
 async fn pull_refreshes_expired_session_once() {
+    common::log_case("pull_refreshes_expired_session_once");
     let _guard = common::lock_env();
     let server = MockServer::start(Mode::Normal, common::make_payload("refresh")).await;
     let env = TestEnv::new();
@@ -412,6 +476,7 @@ async fn pull_refreshes_expired_session_once() {
 
 #[tokio::test]
 async fn versions_refreshes_session_via_auth_client() {
+    common::log_case("versions_refreshes_session_via_auth_client");
     let _guard = common::lock_env();
     let server = MockServer::start(Mode::ExpiresOnce, common::make_payload("auth-refresh")).await;
     let env = TestEnv::new();
@@ -440,6 +505,7 @@ async fn versions_refreshes_session_via_auth_client() {
 
 #[tokio::test]
 async fn pull_requires_explicit_version_and_rejects_bad_target() {
+    common::log_case("pull_requires_explicit_version_and_rejects_bad_target");
     let _guard = common::lock_env();
     let server = MockServer::start(Mode::Normal, common::make_payload("latest")).await;
     let env = TestEnv::new();
@@ -487,6 +553,7 @@ async fn pull_requires_explicit_version_and_rejects_bad_target() {
 
 #[tokio::test]
 async fn new_version_lock_and_delete_app_workflows() {
+    common::log_case("new_version_lock_and_delete_app_workflows");
     let _guard = common::lock_env();
     let server = MockServer::start(Mode::Normal, common::make_payload("lifecycle")).await;
     let env = TestEnv::new();

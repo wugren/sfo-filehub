@@ -62,6 +62,12 @@ export const MESSAGES = {
     en: "Change \"{name}\" visibility from {from} to {to}?",
   },
   "projects.visConfirm": { zh: "更改可见性", en: "Change visibility" },
+  "projects.prevPage": { zh: "上一页", en: "Previous" },
+  "projects.nextPage": { zh: "下一页", en: "Next" },
+  "projects.pageInfo": {
+    zh: "第 {page} / {pages} 页 · 共 {total} 个项目",
+    en: "Page {page} / {pages} · {total} projects",
+  },
 
   "detail.back": { zh: "返回项目列表", en: "Projects" },
   "detail.delete": { zh: "删除", en: "Delete" },
@@ -165,25 +171,21 @@ export const MESSAGES = {
     en: "Select at least one project, or choose All.",
   },
   "tokens.form.scopesRequired": { zh: "请至少勾选一个权限。", en: "Select at least one permission scope." },
-  "tokens.form.expiresAtHint": {
-    zh: "expires_at 留空 = 不修改。修改项目范围/权限会重签并生成新 JWT（一次性展示）。",
-    en: "expires_at blank = no change. Scope changes trigger re-sign + new JWT (shown once).",
-  },
-  "tokens.form.resignWarning": {
-    zh: "修改权限或项目范围会重签 Token：旧 JWT 立即失效，新 JWT 仅展示一次。",
-    en: "Changing scopes or project scope re-signs the token. The old JWT is immediately invalidated and the new JWT is shown once.",
+  "tokens.form.editNoResignHint": {
+    zh: "属性修改仅保存、不重新签发：原 JWT 保持有效，权限变更立即生效；需要新 JWT 请点击列表中的「重新签发」。",
+    en: "Attribute edits are saved without re-signing: the existing JWT stays valid and changes take effect immediately. Use \"Re-sign\" to issue a new JWT.",
   },
   "tokens.save": { zh: "保存修改", en: "Save changes" },
   "tokens.createBtn": { zh: "创建 Token", en: "Create token" },
   "tokens.edit": { zh: "编辑", en: "Edit" },
-  "tokens.rotate": { zh: "轮换", en: "Rotate" },
+  "tokens.resign": { zh: "重新签发", en: "Re-sign" },
   "tokens.revoke": { zh: "撤销", en: "Revoke" },
-  "tokens.rotateTitle": { zh: "轮换「{name}」", en: "Rotate \"{name}\"" },
-  "tokens.rotateBody": {
-    zh: "轮换会签发新 JWT，当前 Token 立即失效。",
-    en: "Rotating issues a new JWT. The current token is immediately invalidated.",
+  "tokens.resignTitle": { zh: "重新签发「{name}」", en: "Re-sign \"{name}\"" },
+  "tokens.resignBody": {
+    zh: "重新签发会生成新 JWT（不过期）：当前 Token 的所有旧 JWT 副本立即失效，新 JWT 仅展示这一次。",
+    en: "Re-signing issues a new JWT with no expiry. All existing copies of this token are immediately invalidated, and the new JWT is shown only once.",
   },
-  "tokens.rotateConfirm": { zh: "轮换 Token", en: "Rotate token" },
+  "tokens.resignConfirm": { zh: "重新签发 Token", en: "Re-sign token" },
   "tokens.revokeTitle": { zh: "撤销「{name}」", en: "Revoke \"{name}\"" },
   "tokens.revokeBody": {
     zh: "撤销后 Token 立即失效，使用它的系统将失去访问权限。此操作无法撤销。",
@@ -195,7 +197,7 @@ export const MESSAGES = {
     en: "Token created — copy your token now",
   },
   "tokens.jwt.updated": { zh: "Token 已更新——已签发新 JWT", en: "Token updated — new JWT issued" },
-  "tokens.jwt.rotated": { zh: "「{name}」已轮换——新 JWT", en: "\"{name}\" rotated — new JWT" },
+  "tokens.jwt.resigned": { zh: "「{name}」已重新签发——新 JWT", en: "\"{name}\" re-signed — new JWT" },
   "tokens.jwt.warnTitle": { zh: "仅一次性展示", en: "One-time display only" },
   "tokens.jwt.warnBody": {
     zh: "该 Token 不会再次显示。请立即复制并妥善保存。旧 JWT 已立即失效。",

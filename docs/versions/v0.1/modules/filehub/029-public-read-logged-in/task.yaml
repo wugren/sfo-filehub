@@ -1,0 +1,34 @@
+schema_version: 1
+
+# 用户 2026-08-24 回复「确认」，采纳 standard 层级并批准本提案。
+workflow_tier: standard
+
+version: v0.1
+packet_module: filehub
+task_name: 029-public-read-logged-in
+stage: general
+mode: manual
+auto_pipeline_start_stage:
+
+proposal: proposal.md
+completion_report: completion-report.md
+change_record: docs/changes/029-public-read-logged-in.md
+design: design.md
+testing: testing.md
+testplan: testplan.yaml
+acceptance_report: acceptance-report.md
+pipeline_plan: pipeline/plan.md
+risk_profile: risk-profile.yaml
+lifecycle_state: lifecycle.json
+changed_paths_file: .harness/evidence/v0.1/stage-scope/029-public-read-logged-in.paths
+baseline_manifest: .harness/baselines/v0.1/029-public-read-logged-in-delivery/manifest.json
+
+changes:
+  - id: fh-permissions-public-read-login
+    target_module: filehub
+    scope_paths: [server/src/permissions/checker.rs]
+    changed_paths_file:
+  - id: fh-permissions-public-read-tests
+    target_module: filehub
+    scope_paths: [server/tests/unit/permissions.rs, server/tests/unit/projects.rs]
+    changed_paths_file:

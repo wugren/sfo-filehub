@@ -17,19 +17,34 @@ pub struct VersionError {
 
 impl VersionError {
     pub fn not_found(message: impl Into<String>) -> Self {
-        Self { kind: VersionErrorKind::NotFound, message: message.into() }
+        Self {
+            kind: VersionErrorKind::NotFound,
+            message: message.into(),
+        }
     }
     pub fn forbidden(message: impl Into<String>) -> Self {
-        Self { kind: VersionErrorKind::Forbidden, message: message.into() }
+        Self {
+            kind: VersionErrorKind::Forbidden,
+            message: message.into(),
+        }
     }
     pub fn conflict(message: impl Into<String>) -> Self {
-        Self { kind: VersionErrorKind::Conflict, message: message.into() }
+        Self {
+            kind: VersionErrorKind::Conflict,
+            message: message.into(),
+        }
     }
     pub fn invalid_input(message: impl Into<String>) -> Self {
-        Self { kind: VersionErrorKind::InvalidInput, message: message.into() }
+        Self {
+            kind: VersionErrorKind::InvalidInput,
+            message: message.into(),
+        }
     }
     pub fn db(message: impl Into<String>) -> Self {
-        Self { kind: VersionErrorKind::Db, message: message.into() }
+        Self {
+            kind: VersionErrorKind::Db,
+            message: message.into(),
+        }
     }
 }
 

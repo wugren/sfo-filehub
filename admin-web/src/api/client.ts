@@ -5,6 +5,7 @@ import {
   type CurrentUser,
   type LoginResult,
   type Project,
+  type ProjectPage,
   type ProjectRole,
   type TokenCreateInput,
   type TokenIssued,
@@ -48,7 +49,11 @@ export class ApiClient {
     return `${this.base}${path}`;
   }
 
-  private async raw(method: string, path: string, options: RequestOptions = {}): Promise<string> {
+  private async rawResponse(
+    method: string,
+    path: string,
+    options: RequestOptions = {},
+  ): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     const headers: Record<string, string> = {};
@@ -75,6 +80,11 @@ export class ApiClient {
     } finally {
       clearTimeout(timer);
     }
+    return response;
+  }
+
+  private async raw(method: string, path: string, options: RequestOptions = {}): Promise<string> {
+    const response = await this.rawResponse(method, path, options);
     const bodyText = await response.text();
     if (!response.ok) {
       throw ApiError.fromV1(response.status, bodyText);
@@ -138,6 +148,54 @@ export class ApiClient {
     return this.v1Json<Project[]>("GET", "/api/v1/projects", { bearer });
   }
 
+  async listProjectsPage(
+    bearer: string,
+    options: { limit?: number; offset?: number } = {},
+  ): Promise<ProjectPage> {
+    const query = new URLSearchParams();
+    if (options.limit !== undefined) {
+      query.set("limit", String(options.limit));
+    }
+    if (options.offset !== undefined) {
+      query.set("offset", String(options.offset));
+    }
+    const suffix = query.size > 0 ? `?${query.toString()}` : "";
+    const response = await this.rawResponse("GET", `/api/v1/projects${suffix}`, { bearer });
+    const bodyText = await response.text();
+    if (!response.ok) {
+      throw ApiError.fromV1(response.status, bodyText);
+    }
+    let items: Project[];
+    try {
+      items = JSON.parse(bodyText) as Project[];
+    } catch {
+      throw ApiError.transport("服务响应不是合法 JSON：/api/v1/projects");
+    }
+    const rawTotal = response.headers.get("x-total-count");
+    const total = rawTotal !== null ? Number(rawTotal) : items.length;
+    return { items, total: Number.isFinite(total) ? total : items.length };
+  }
+
+  /** 分页拉取全部可见项目；X-Total-Count 缺失时回退单页。 */
+  async listAllProjects(bearer: string, pageSize = 500): Promise<Project[]> {
+    const limit = Math.min(Math.max(1, Math.floor(pageSize)), 500);
+    const items: Project[] = [];
+    let offset = 0;
+    for (;;) {
+      const page = await this.listProjectsPage(bearer, { limit, offset });
+      items.push(...page.items);
+      if (page.items.length === 0 || items.length >= page.total) {
+        break;
+      }
+      offset += page.items.length;
+    }
+    return items;
+  }
+
+  async getProject(bearer: string, projectId: number): Promise<Project> {
+    return this.v1Json<Project>("GET", `/api/v1/projects/${projectId}`, { bearer });
+  }
+
   async createProject(bearer: string, name: string, visibility: Visibility): Promise<Project> {
     return this.v1Json<Project>("POST", "/api/v1/projects", {
       bearer,
@@ -193,8 +251,8 @@ export class ApiClient {
     bearer: string,
     tokenId: number,
     patch: TokenUpdateInput,
-  ): Promise<TokenIssued | TokenSummary> {
-    return this.v1Json<TokenIssued | TokenSummary>("POST", `/api/v1/tokens/${tokenId}`, {
+  ): Promise<TokenSummary> {
+    return this.v1Json<TokenSummary>("POST", `/api/v1/tokens/${tokenId}`, {
       bearer,
       json: patch,
     });
@@ -235,15 +293,13 @@ export class ApiClient {
     version: string,
     app: string,
     file: Blob,
-    sha256?: string,
+    sha256: string,
   ): Promise<VersionRecord> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     const form = new FormData();
     form.append("file", file, file instanceof File ? file.name : "payload.tar.gz");
-    if (sha256) {
-      form.append("sha256", sha256);
-    }
+    form.append("sha256", sha256);
     const headers: Record<string, string> = { Authorization: `Bearer ${bearer}` };
     let response: Response;
     try {

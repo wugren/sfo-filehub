@@ -8,24 +8,29 @@ license.workspace = true
 [dependencies]
 async-trait = "0.1"
 base64 = "0.22"
+bytes = "1"
+bcrypt = "0.19"
 chrono = { version = "0.4", features = ["serde"] }
 ed25519-dalek = { version = "3", default-features = false, features = ["pem", "rand_core"] }
-flate2 = "1"
 http = "1"
+http-body-util = "0.1"
 jsonwebtoken = "9"
 log = "0.4"
 getrandom = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde-saphyr = { version = "1", default-features = false, features = ["deserialize"] }
 sfo-account = "0.2"
-sfo-http = { version = "0.7", features = ["actix-web"] }
+sfo-http = { version = "0.8", features = ["actix-web"] }
 sfo-log = "0.1"
 sfo-result = "0.2"
 sha2 = "0.10"
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite"] }
-tar = "0.4"
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [dev-dependencies]
-reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
+flate2 = "1"
+futures-util = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "stream"] }
+tar = "0.4"

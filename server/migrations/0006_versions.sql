@@ -1,7 +1,8 @@
 -- 归属：versions 子模块。版本为显式创建实体，可不可逆锁定；版本内具名 app 1:N。
+-- project_id 外键级联：项目删除时自动清除版本（新库生效；存量库由服务层显式清理兜底）。
 CREATE TABLE IF NOT EXISTS versions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    project_id INTEGER NOT NULL,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     version TEXT NOT NULL,
     published_at TEXT NOT NULL,
     locked_at TEXT,

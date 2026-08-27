@@ -18,6 +18,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
+  MUSL_TARGET: x86_64-unknown-linux-musl
 
 jobs:
   version:
@@ -102,6 +103,13 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup default stable
 
+      - name: Install musl toolchain
+        if: ${{ matrix.server }}
+        run: |
+          rustup target add ${MUSL_TARGET}
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
       - name: Cache cargo registry
         uses: actions/cache@v6
         with:
@@ -118,7 +126,7 @@ jobs:
 
       - name: Build filehub-server (release)
         if: ${{ matrix.server }}
-        run: cargo build --release -p filehub-server
+        run: cargo build --release -p filehub-server --target ${MUSL_TARGET}
 
       - name: Build filehub-cli (release)
         run: cargo build --release -p filehub-cli
@@ -127,9 +135,8 @@ jobs:
         if: ${{ matrix.server }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: server-binary
-          path: target/release/filehub-server
-          archive: false
+          name: filehub-server
+          path: target/${{ env.MUSL_TARGET }}/release/filehub-server
           if-no-files-found: error
           retention-days: 14
 
@@ -149,9 +156,8 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: cli-${{ matrix.artifact }}
+          name: filehub-cli-${{ matrix.artifact }}
           path: dist/filehub-cli_${{ needs.version.outputs.version }}_${{ matrix.artifact }}.tar.gz
-          archive: false
           if-no-files-found: error
           retention-days: 14
 
@@ -237,6 +243,32 @@ jobs:
           docker build --tag "$image" ctx
           docker image inspect "$image" >/dev/null
 
+      - name: Smoke test container startup
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/filehub:v${VERSION}"
+          cid="filehub-smoke-$$"
+          docker run -d --rm --name "$cid" -e FH_ADMIN_PASSWORD=ci-smoke "$image"
+          cleanup() { docker rm -f "$cid" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          ok=0
+          for _ in $(seq 1 45); do
+            if docker exec "$cid" sh -c 'grep -q "^filehub-server$" /proc/[0-9]*/comm 2>/dev/null' \
+               && docker exec "$cid" wget -q -O /dev/null http://127.0.0.1/healthz; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "container smoke test failed: filehub-server not running or /healthz unreachable" >&2
+            docker logs --tail 50 "$cid" >&2 || true
+            exit 1
+          fi
+          echo "container smoke test passed (filehub-server running, /healthz ok)"
+
       - name: Publish image to GHCR
         if: ${{ needs.version.outputs.publish == 'true' }}
         env:
@@ -275,7 +307,7 @@ jobs:
       - name: Download CLI archives
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          pattern: filehub-cli_*.tar.gz
+          pattern: filehub-cli-*
           path: dist/raw/cli
           merge-multiple: true
 

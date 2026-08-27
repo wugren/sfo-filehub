@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "stages": {
+    "acceptance": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/028-token-edit-no-resign/acceptance-report.md": "02eee63b758c50f4638d2f2735b530147284b8bf0f9c077bef62fec70121d6a5"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "bd923f4a7614b08b2e0697ebf8e2159c67efb6671996daf712981e9b752112c4"
+    },
+    "design": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/028-token-edit-no-resign/design.md": "f829932be627a5c919759309bc439b30f28c849bccccb064e3c0e104ab4d44bb",
+        "docs/versions/v0.1/modules/filehub/028-token-edit-no-resign/risk-profile.yaml": "ee6d75789419cc8b7974f6e54c92eb97cc25bbeac69d0c0a8b4e60272cf06cc1"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "bd923f4a7614b08b2e0697ebf8e2159c67efb6671996daf712981e9b752112c4"
+    },
+    "implementation": {
+      "inputs": {},
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "bd923f4a7614b08b2e0697ebf8e2159c67efb6671996daf712981e9b752112c4"
+    },
+    "proposal": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/028-token-edit-no-resign/proposal.md": "0a4e965a981a609894f36a55a7998f93e7ec664414e4f3137e73855d0a77c951"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "bd923f4a7614b08b2e0697ebf8e2159c67efb6671996daf712981e9b752112c4"
+    },
+    "testing": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/028-token-edit-no-resign/testing.md": "2599a52524c0cf75d4995bb683f7e2f3296261fff893d0e78abedf51cf11b4dc",
+        "docs/versions/v0.1/modules/filehub/028-token-edit-no-resign/testplan.yaml": "1aa4c78019067d0b532187c91604d065ee3dc5d903f11ae9afe3aee306dca921"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "bd923f4a7614b08b2e0697ebf8e2159c67efb6671996daf712981e9b752112c4",
+      "test_run": ".harness/test-results/test-runs/20260823T170853Z-filehub+028-token-edit-no-resign-all.json",
+      "test_run_sha256": "af6b122d727a5b0b666b6963783294ac112923040be0e6a6c3ed99fb9180b9b4"
+    }
+  },
+  "task_manifest": "task.yaml"
+}

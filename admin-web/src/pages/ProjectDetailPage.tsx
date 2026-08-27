@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactElement } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiClient } from "../api/client";
+import { ApiError } from "../api/errors";
 import {
   formatBytes,
   type Collaborator,
@@ -10,6 +11,7 @@ import {
   type Visibility,
 } from "../api/contract";
 import { sessionStore, withAuthRetry } from "../api/session";
+import { sha256Hex } from "../api/sha256";
 import { Icon } from "../components/icons";
 import {
   Badge,
@@ -70,18 +72,19 @@ export function ProjectDetailPage({ client }: { client: ApiClient }): ReactEleme
     setBusy(true);
     setError("");
     try {
-      const [projectList, versionList] = await Promise.all([
-        withAuthRetry(sessionStore, (bearer) => client.listProjects(bearer)),
+      const [project, versionList] = await Promise.all([
+        withAuthRetry(sessionStore, (bearer) => client.getProject(bearer, projectId)),
         withAuthRetry(sessionStore, (bearer) => client.listVersions(bearer, projectId)),
       ]);
-      const found = projectList.find((item) => item.project_id === projectId) ?? null;
-      setProject(found);
+      setProject(project);
       setVersions(versionList);
-      if (!found) {
-        setError(statusMessage(new Error(t("notFound.title"))));
-      }
     } catch (caught) {
-      setError(statusMessage(caught));
+      if (caught instanceof ApiError && caught.kind === "not_found") {
+        setProject(null);
+        setError(statusMessage(new Error(t("notFound.title"))));
+      } else {
+        setError(statusMessage(caught));
+      }
     } finally {
       setBusy(false);
     }
@@ -148,8 +151,9 @@ export function ProjectDetailPage({ client }: { client: ApiClient }): ReactEleme
     setUploads((current) => ({ ...current, [version]: { ...state, busy: true } }));
     setError("");
     try {
+      const sha256 = await sha256Hex(state.file);
       await withAuthRetry(sessionStore, (bearer) =>
-        client.uploadApp(bearer, projectId, version, app, state.file as Blob),
+        client.uploadApp(bearer, projectId, version, app, state.file as Blob, sha256),
       );
       setUploads((current) => ({ ...current, [version]: { app: "", file: null, busy: false } }));
       await load();

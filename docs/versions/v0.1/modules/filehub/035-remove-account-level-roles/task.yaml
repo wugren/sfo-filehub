@@ -1,0 +1,43 @@
+schema_version: 1
+
+# 用户 2026-08-25 回复「确认」：确认采纳提案（含 owner-only 删除边界）并接受 standard 层级。
+workflow_tier: standard
+
+version: v0.1
+packet_module: filehub
+task_name: 035-remove-account-level-roles
+stage: proposal
+mode: manual
+auto_pipeline_start_stage:
+
+proposal: proposal.md
+completion_report: completion-report.md
+change_record: docs/changes/035-remove-account-level-roles.md
+design: design.md
+testing: testing.md
+testplan: testplan.yaml
+acceptance_report: acceptance-report.md
+pipeline_plan: pipeline/plan.md
+risk_profile: risk-profile.yaml
+lifecycle_state: lifecycle.json
+
+changed_paths_file: .harness/evidence/v0.1/stage-scope/035-remove-account-level-roles.paths
+baseline_manifest: .harness/baselines/v0.1/035-remove-account-level-roles-delivery/manifest.json
+
+changes:
+  - id: fh-remove-account-level-roles
+    target_module: filehub
+    scope_paths: [server/src/model/role.rs, server/src/model/mod.rs, server/src/model/principal.rs, server/src/model/config.rs, server/src/permissions/mod.rs, server/src/permissions/checker.rs, server/src/http/auth.rs, server/src/contract/mod.rs, server/src/account/authn.rs, server/src/projects/service.rs, server/migrations/0003_roles_grants.sql, server/tests/, filehub-server.json, docs/versions/v0.1/modules/filehub/001-filehub-core-platform/design/, docs/modules/filehub.md]
+    changed_paths_file:
+  - id: fh-project-create-open-to-all
+    target_module: filehub
+    scope_paths: [server/src/permissions/checker.rs, server/src/projects/service.rs, server/tests/unit/permissions.rs, server/tests/api_integration.rs, docs/api/v1-contract.md]
+    changed_paths_file:
+  - id: fh-project-delete-owner-only
+    target_module: filehub
+    scope_paths: [server/src/permissions/checker.rs, server/src/projects/service.rs, server/tests/unit/projects.rs, docs/api/v1-contract.md]
+    changed_paths_file:
+  - id: fh-role-cleanup-tests-docs
+    target_module: filehub
+    scope_paths: [server/tests/, docs/versions/v0.1/modules/filehub/001-filehub-core-platform/design/, docs/modules/filehub.md, docs/api/v1-contract.md]
+    changed_paths_file:

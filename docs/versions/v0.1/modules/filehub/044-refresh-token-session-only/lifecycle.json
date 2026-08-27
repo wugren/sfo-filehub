@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "stages": {
+    "acceptance": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/044-refresh-token-session-only/acceptance-report.md": "6d4b840b98d159a9fcff13f4deaf0b005f02e6dcb0d52c2a22cf173a539c7ff1"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "4d5e42cdcc5ee03f244a887cfd7f5a0c6355acfdb983cbb7f9fb0974f3b5cfeb"
+    },
+    "design": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/044-refresh-token-session-only/design.md": "2b63dec1ac879c245bbafcecbb25b650db834e72cd670ea1a12f1f64312b2343",
+        "docs/versions/v0.1/modules/filehub/044-refresh-token-session-only/risk-profile.yaml": "962e1f33b73594429912d408635bb9b0ccba30781a549411fc94685f0723cbf9"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "4d5e42cdcc5ee03f244a887cfd7f5a0c6355acfdb983cbb7f9fb0974f3b5cfeb"
+    },
+    "implementation": {
+      "inputs": {},
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "4d5e42cdcc5ee03f244a887cfd7f5a0c6355acfdb983cbb7f9fb0974f3b5cfeb"
+    },
+    "proposal": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/044-refresh-token-session-only/proposal.md": "9abb00ee9cd0c72d2356254ca7e9123affd68a7c84bf064c2dce5542ef89970a"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "4d5e42cdcc5ee03f244a887cfd7f5a0c6355acfdb983cbb7f9fb0974f3b5cfeb"
+    },
+    "testing": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/044-refresh-token-session-only/testing.md": "1335f1c2e5022f60b7e0a624155a7cfa7453aeab94c9d62812e0e7ddda3d9375",
+        "docs/versions/v0.1/modules/filehub/044-refresh-token-session-only/testplan.yaml": "6dd7d34f5e2a602f9f666bbdbb5626697caaaa1748b69e0e1c9f39764386337f"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "4d5e42cdcc5ee03f244a887cfd7f5a0c6355acfdb983cbb7f9fb0974f3b5cfeb",
+      "test_run": ".harness/test-results/test-runs/20260826T030930Z-filehub+044-refresh-token-session-only-all.json",
+      "test_run_sha256": "070a0de0a69f85e2e4d146cf2ca9145306c12bf85f64a0d2be18c1ff8f760995"
+    }
+  },
+  "task_manifest": "task.yaml"
+}

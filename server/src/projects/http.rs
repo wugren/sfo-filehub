@@ -1,17 +1,23 @@
 //! projects 的 HTTP 接口（I-007）。
 
-use http::{Method, StatusCode};
-use sfo_http::http_server::{HttpServer, Request, Response};
+use http::{HeaderName, Method, StatusCode};
 use serde::Deserialize;
+use sfo_http::http_server::{Request, Response};
 use std::sync::Arc;
 
-use crate::contract::{api_error_response, empty_response, json_body, json_ok, path_param, ApiError, AuthProvider};
+use crate::contract::{
+    ApiError, AuthProvider, api_error_response, empty_response, header_value, json_body, json_ok,
+    path_param,
+};
 use crate::model::{ProjectId, Visibility};
 
 use super::{ProjectError, ProjectErrorKind, ProjectService};
 
-pub fn register<S, Req, Resp>(server: &mut S, projects: Arc<dyn ProjectService>, auth: Arc<AuthProvider>)
-where
+pub fn register<S, Req, Resp>(
+    server: &mut S,
+    projects: Arc<dyn ProjectService>,
+    auth: Arc<AuthProvider>,
+) where
     S: sfo_http::http_server::HttpServer<Req, Resp>,
     Req: Request + Sync,
     Resp: Response,
@@ -24,7 +30,10 @@ where
         async move {
             let principal = crate::api_try!(auth.require_user_or_token_req(&req).await);
             let body: CreateProjectRequest = crate::api_try!(json_body(&mut req).await);
-            match projects.create(&principal, &body.name, body.visibility).await {
+            match projects
+                .create(&principal, &body.name, body.visibility)
+                .await
+            {
                 Ok(record) => json_ok(StatusCode::CREATED, &record),
                 Err(e) => api_error_response(&project_error_to_api(&e)),
             }
@@ -38,8 +47,30 @@ where
         let auth = auth_list.clone();
         async move {
             let principal = crate::api_try!(auth.current_principal_req(&req).await);
-            match projects.list(&principal).await {
-                Ok(list) => json_ok(StatusCode::OK, &list),
+            let query: ProjectListQuery = match req.query() {
+                Ok(query) => query,
+                Err(e) => {
+                    return api_error_response(&ApiError::invalid_input(format!(
+                        "invalid query string: {e}"
+                    )));
+                }
+            };
+            let limit = query.limit.unwrap_or(DEFAULT_PROJECT_LIST_LIMIT);
+            if limit == 0 || limit > MAX_PROJECT_LIST_LIMIT {
+                return api_error_response(&ApiError::invalid_input(format!(
+                    "limit must be between 1 and {MAX_PROJECT_LIST_LIMIT}"
+                )));
+            }
+            let offset = query.offset.unwrap_or(0);
+            match projects.list(&principal, limit, offset).await {
+                Ok(page) => {
+                    let mut resp: Resp = json_ok(StatusCode::OK, &page.items)?;
+                    resp.insert_header(
+                        HeaderName::from_static("x-total-count"),
+                        header_value(&page.total.to_string()),
+                    );
+                    Ok(resp)
+                }
                 Err(e) => api_error_response(&project_error_to_api(&e)),
             }
         }
@@ -47,68 +78,85 @@ where
 
     let projects_patch = projects.clone();
     let auth_patch = auth.clone();
-    server.serve("/api/v1/projects/{project_id}/visibility", Method::POST, move |mut req: Req| {
-        let projects = projects_patch.clone();
-        let auth = auth_patch.clone();
-        async move {
-            let principal = crate::api_try!(auth.require_user_or_token_req(&req).await);
-            let project_id = crate::api_try!(path_param::<Req, ProjectId>(&req, "project_id"));
-            let body: VisibilityRequest = crate::api_try!(json_body(&mut req).await);
-            match projects.set_visibility(&project_id, &principal, body.visibility).await {
-                Ok(()) => {
-                    let record = match projects.list(&principal).await {
-                        Ok(list) => list.into_iter().find(|p| p.project_id == project_id),
-                        Err(e) => return api_error_response(&project_error_to_api(&e)),
-                    };
-                    match record {
-                        Some(record) => json_ok(StatusCode::OK, &record),
-                        None => api_error_response(&ApiError::not_found("project not found")),
+    server.serve(
+        "/api/v1/projects/{project_id}/visibility",
+        Method::POST,
+        move |mut req: Req| {
+            let projects = projects_patch.clone();
+            let auth = auth_patch.clone();
+            async move {
+                let principal = crate::api_try!(auth.require_user_or_token_req(&req).await);
+                let project_id = crate::api_try!(path_param::<Req, ProjectId>(&req, "project_id"));
+                let body: VisibilityRequest = crate::api_try!(json_body(&mut req).await);
+                match projects
+                    .set_visibility(&project_id, &principal, body.visibility)
+                    .await
+                {
+                    Ok(()) => {
+                        let record = match projects.get(&project_id, &principal).await {
+                            Ok(Some(record)) => record,
+                            Ok(None) => {
+                                return api_error_response(&ApiError::not_found(
+                                    "project not found",
+                                ));
+                            }
+                            Err(e) => return api_error_response(&project_error_to_api(&e)),
+                        };
+                        json_ok(StatusCode::OK, &record)
                     }
+                    Err(e) => api_error_response(&project_error_to_api(&e)),
                 }
-                Err(e) => api_error_response(&project_error_to_api(&e)),
             }
-        }
-    });
+        },
+    );
 
     let projects_delete = projects.clone();
     let auth_delete = auth.clone();
-    server.serve("/api/v1/projects/{project_id}", Method::DELETE, move |req: Req| {
-        let projects = projects_delete.clone();
-        let auth = auth_delete.clone();
-        async move {
-            let principal = crate::api_try!(auth.require_user_or_token_req(&req).await);
-            let project_id = crate::api_try!(path_param::<Req, ProjectId>(&req, "project_id"));
-            match projects.delete(&project_id, &principal).await {
-                Ok(()) => empty_response(StatusCode::NO_CONTENT),
-                Err(e) => api_error_response(&project_error_to_api(&e)),
+    server.serve(
+        "/api/v1/projects/{project_id}",
+        Method::DELETE,
+        move |req: Req| {
+            let projects = projects_delete.clone();
+            let auth = auth_delete.clone();
+            async move {
+                let principal = crate::api_try!(auth.require_user_or_token_req(&req).await);
+                let project_id = crate::api_try!(path_param::<Req, ProjectId>(&req, "project_id"));
+                match projects.delete(&project_id, &principal).await {
+                    Ok(()) => empty_response(StatusCode::NO_CONTENT),
+                    Err(e) => api_error_response(&project_error_to_api(&e)),
+                }
             }
-        }
-    });
+        },
+    );
 
     // GET /api/v1/projects/{project_id}：匿名(public)/session/token，metadata:read。
     let projects_get = projects.clone();
     let auth_get = auth.clone();
-    server.serve("/api/v1/projects/{project_id}", Method::GET, move |req: Req| {
-        let projects = projects_get.clone();
-        let auth = auth_get.clone();
-        async move {
-            let principal = crate::api_try!(auth.current_principal_req(&req).await);
-            let project_id = crate::api_try!(path_param::<Req, ProjectId>(&req, "project_id"));
-            match projects.list(&principal).await {
-                Ok(list) => match list.into_iter().find(|p| p.project_id == project_id) {
-                    Some(record) => json_ok(StatusCode::OK, &record),
-                    None => {
+    server.serve(
+        "/api/v1/projects/{project_id}",
+        Method::GET,
+        move |req: Req| {
+            let projects = projects_get.clone();
+            let auth = auth_get.clone();
+            async move {
+                let principal = crate::api_try!(auth.current_principal_req(&req).await);
+                let project_id = crate::api_try!(path_param::<Req, ProjectId>(&req, "project_id"));
+                match projects.get(&project_id, &principal).await {
+                    Ok(Some(record)) => json_ok(StatusCode::OK, &record),
+                    Ok(None) => {
                         if matches!(principal, crate::model::Principal::Anonymous) {
-                            api_error_response(&ApiError::unauthorized("private project requires login or the project does not exist"))
+                            api_error_response(&ApiError::unauthorized(
+                                "private project requires login or the project does not exist",
+                            ))
                         } else {
                             api_error_response(&ApiError::not_found("project not found"))
                         }
                     }
-                },
-                Err(e) => api_error_response(&project_error_to_api(&e)),
+                    Err(e) => api_error_response(&project_error_to_api(&e)),
+                }
             }
-        }
-    });
+        },
+    );
 }
 
 fn project_error_to_api(err: &ProjectError) -> ApiError {
@@ -135,4 +183,15 @@ fn default_visibility() -> Visibility {
 #[derive(Deserialize)]
 pub struct VisibilityRequest {
     pub visibility: Visibility,
+}
+
+const DEFAULT_PROJECT_LIST_LIMIT: u32 = 100;
+const MAX_PROJECT_LIST_LIMIT: u32 = 500;
+
+#[derive(Deserialize)]
+struct ProjectListQuery {
+    #[serde(default)]
+    limit: Option<u32>,
+    #[serde(default)]
+    offset: Option<u32>,
 }

@@ -14,10 +14,10 @@ filehub 是文件集散产品：用户发布 `.tar.gz` 版本产物，管理后�
 
 | 子模块 | 目录 | 职责 |
 |--------|------|------|
-| account | `server/src/account/` | 配置初始化适配与 `sfo-account` 装配；直接导出 `sfo-account` 的 HTTP 接口（`AccountServer::register_server`：登录/会话信息/refresh 路由）；认证中间件复用 `decode_session`；不自建 SessionService 与 session 生命周期管理；`Authorization` 头，不用 cookie |
+| account | `server/src/account/` | 配置初始化适配与 `sfo-account` 装配；账号 session/refresh JWT 使用 EdDSA（Ed25519）签名，只配置 PKCS#8 PEM 私钥并自动派生公钥；直接导出 `sfo-account` 的 HTTP 接口（`AccountServer::register_server`：登录/会话信息/refresh 路由）；认证中间件复用 `decode_session`（refresh 类型仅可用于续期，decode_session 拒绝 refresh token 映射为用户身份）；不自建 SessionService 与 session 生命周期管理；`Authorization` 头，不用 cookie |
 | permissions | `server/src/permissions/` | 权限数据存储与校验服务；账号/项目协作角色与统一访问判定 |
-| tokens | `server/src/tokens/` | JWT 形态 token 生命周期（创建/列表/修改/轮换/撤销）、权限数据与验签公钥（签名私钥即弃，不落库）、过期仅由 JWT exp 承载（token 本身无过期）、token session 与用户登录 session 凭据类型区分 |
-| files | `server/src/storage/` | `.tar.gz` 物理存储、原子写入、SHA-256、下载流与路径防穿越 |
+| tokens | `server/src/tokens/` | JWT 形态 token 生命周期（创建/列表/属性修改不重签/显式重签即轮换/撤销）、权限数据与验签公钥（签名私钥即弃，不落库）、过期仅由 JWT exp 承载（token 本身无过期）、token session 与用户登录 session 凭据类型区分 |
+| files | `server/src/storage/` | `.tar.gz` 物理存储、原子写入、SHA-256（上传必填校验）、下载流与路径防穿越；不做解压校验 |
 | versions | `server/src/versions/` | 版本显式创建与不可逆锁定、版本内具名 app 的发布/更新/删除、latest 语义、版本-app 关联与原子发布协调 |
 | projects | `server/src/projects/` | 项目 CRUD 与 public/private 可见性 |
 | http | `server/src/http/` + `server/src/contract/` | `/api/v1` 路由/DTO/错误映射与服务装配 |
@@ -44,7 +44,7 @@ filehub 是文件集散产品：用户发布 `.tar.gz` 版本产物，管理后�
 - Inputs: `filehub login/logout/push/pull/versions/new-version/lock-version/delete-app` 命令、stdin/环境变量凭据输入、本地文件或目录、目标文件路径/输出路径、v1 API 响应
 - Outputs: 二进制 `filehub-cli`、本地凭据配置文件（类 Unix `0600`）、push/pull/版本输出与稳定退出码
 - Contracts: CLI 命令面、参数与退出码冻结于任务提案与 `design/cli.md`；与 `docs/api/v1-contract.md` 对齐
-- Dependencies: `sfo-log`（日志统一）、reqwest-rustls、clap、tar/flate2、sha2、serde/serde_json、toml、dirs（来源与版本经 Cargo.lock 锁定）
+- Dependencies: `sfo-log`（日志统一）、reqwest-rustls、clap、tar/flate2、sha2、serde/serde_json、serde-saphyr（服务端 YAML 配置解析）、toml、dirs（来源与版本经 Cargo.lock 锁定）
 - 凭据安全约束：密码/token/session 明文不进入命令行参数与日志；token > session 复用；凭据文件原子写且权限最小化
 
 ## filehub-web 模块结构（admin-web）
@@ -56,7 +56,7 @@ filehub 是文件集散产品：用户发布 `.tar.gz` 版本产物，管理后�
 | api-client | `admin-web/src/api/` | v1 DTO/URL 装配、sfo-account 包装与 `/api/v1` 错误体两套适配、Bearer 注入、下载 blob |
 | session | `admin-web/src/api/session.ts` + `components/ProtectedRoute.tsx` + `pages/LoginPage.tsx` | 登录、会话状态、401 refresh 续期一次、本地登出（server 无登出端点） |
 | projects | `admin-web/src/pages/ProjectsPage.tsx`、`ProjectDetailPage.tsx` | 可见项目列表/创建/删除/可见性切换、版本显式创建/锁定、按应用上传/更新/删除与下载 |
-| tokens | `admin-web/src/pages/TokensPage.tsx` | token 创建/列表/修改(重签)/轮换/撤销与 JWT 一次性明文展示 |
+| tokens | `admin-web/src/pages/TokensPage.tsx` | token 创建/列表/属性修改（不重签）/显式「重新签发」/撤销与 JWT 一次性明文展示 |
 | collaborators | `admin-web/src/pages/MembersPage.tsx` | 按数字 user_id 查看/添加/改级/移除项目协作者 |
 | build | `admin-web/` 工程配置 | Vite 构建、`admin-web/dist` 独立静态交付、`VITE_API_BASE_URL` 指向服务后台 |
 
@@ -68,10 +68,10 @@ filehub 是文件集散产品：用户发布 `.tar.gz` 版本产物，管理后�
 
 - Owner: filehub-server（当前活动任务 `001-filehub-core-platform`）
 - Level: unit（crate 内单元层为基线；dv/integration 层级随测试阶段落地）
-- Inputs: 配置文件（`[users]` 账号与角色、`[server]` sfo-http 监听/CORS（HTTPS 由前置反向代理终结）、`[files]` `data_dir`/归档上限）、`.tar.gz` 上传流（仅 `.tar.gz`）、API 请求
+- Inputs: 配置文件（`[users]` 账号（用户名/密码或密码哈希）与 Ed25519 PKCS#8 PEM 会话签名私钥、`[server]` sfo-http 监听/CORS（HTTPS 由前置反向代理终结）、`[files]` `data_dir`/归档上限）、`.tar.gz` 上传流（仅 `.tar.gz`，携带必填 `sha256`，流式收流并实时限长；服务端不做解压校验）、API 请求
 - Outputs: v1 HTTP API、版本与下载、API 契约文档
-- Contracts: `/api/v1/*`（认证、项目、版本、下载、token、协作者），公开契约先冻结再实现
-- Dependencies: `sfo-account`（账号/会话）、`sfo-http`（HTTP 服务器与全部 HTTP 接口）、`sfo-log`（日志）；来源与版本在设计阶段锁定
+- Contracts: `/api/v1/*`（认证、项目、版本、下载、token、协作者），公开契约先冻结再实现；上传先鉴权后收流，`max_archive_bytes` 超限、缺少/非法/错误 `sha256` 均 422
+- Dependencies: `sfo-account`（账号/会话，crates.io `0.2.1` registry 来源；本地 vendored shim 已于 054 移除）、`sfo-http`（HTTP 服务器与全部 HTTP 接口）、`sfo-log`（日志）；来源与版本在设计阶段锁定
 - 接口约定（服务端子模块）：可能执行 IO（SQLite、物理文件、验签/密钥读取等）的 trait 接口方法一律声明为 async fn；纯计算保持同步；account 无自建 trait，其初始化方法同样为 async
 - Current/Active Task: 无（`002-filehub-web` 已完成并移出任务索引；`001-filehub-core-platform`、`003-filehub-cli` 尚在验收收尾）
 

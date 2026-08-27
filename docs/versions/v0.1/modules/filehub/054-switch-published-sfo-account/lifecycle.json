@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "stages": {
+    "design": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/054-switch-published-sfo-account/design.md": "25993bfc053c14aea281484e6eb0a185c6a9d1f8d93611098c4f502be186b4f5",
+        "docs/versions/v0.1/modules/filehub/054-switch-published-sfo-account/risk-profile.yaml": "b40dc73e909ff3c0a1894a5a2cefacb3f61304d46849dfa5f644966662f807c2"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "7b303d6d18aecc2763fdded59cf50a4928c80f34e4bc7afe2fc7c15baa6f1bb7"
+    },
+    "implementation": {
+      "inputs": {},
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "7b303d6d18aecc2763fdded59cf50a4928c80f34e4bc7afe2fc7c15baa6f1bb7"
+    },
+    "proposal": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/054-switch-published-sfo-account/proposal.md": "47b1506bc411194586c51dd6dd2d951e445ee75c23e7742e9d6ac93694a196e6"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "b7ca25ffb8300e9843d4da35fd6f01b863878aee7b7b28b92601f2a3bd5f2307"
+    },
+    "testing": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/054-switch-published-sfo-account/testing.md": "1eb9179505c22904de069b9870e5079582cf7b32b3dccc568c84aabf0ae871b5",
+        "docs/versions/v0.1/modules/filehub/054-switch-published-sfo-account/testplan.yaml": "aa70e448a9c944c83c95a8feb3e296ab9f3f6730d23ab47245b7e4e60c2919ff"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "8aa63df79866f894f84ecc2bd462ce4d39531f3260ba37c5be177dfe0c7d45ab",
+      "test_run": ".harness/test-results/test-runs/20260827T052905Z-filehub+054-switch-published-sfo-account-all.json",
+      "test_run_sha256": "216eead221aa206d7a63b02dd84466d8aad434d94d43f3c99997c5645a1ef124"
+    }
+  },
+  "task_manifest": "task.yaml"
+}

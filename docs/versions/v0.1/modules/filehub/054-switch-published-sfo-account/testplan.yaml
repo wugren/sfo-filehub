@@ -1,0 +1,78 @@
+schema_version: 1
+# sfo-account 依赖来源切换与 0.2.1 语义适配：任务级测试计划
+task_manifest: task.yaml
+risk_profile: risk-profile.yaml
+api_impact:
+  public_api: migration-required
+  crate_root_export_change: false
+  build_surface_change: true
+  documentation_examples_affected: false
+evidence_inputs: ["server/src", "server/tests", "cli/tests", "docs/api/v1-contract.md", "docs/modules/filehub.md", "README.md", "Cargo.toml", "Cargo.lock"]
+contract_checks:
+  mode: enabled
+  steps:
+    - id: contract-compile-closure
+      name: workspace 全目标编译闭环（crates.io sfo-account 0.2.1）
+      kind: repository-compile-closure
+      assertion: repository-consumers-compile
+      change_ids: ["fh-sfo-account-published-source", "fh-sfo-account-conformance", "fh-sfo-account-regression"]
+      run: ["cargo", "test", "--workspace", "--no-run", "--all-targets"]
+    - id: contract-external-positive
+      name: 迁移后消费方编译（external-positive）
+      kind: external-positive
+      assertion: new-path-compiles
+      change_ids: ["fh-sfo-account-published-source", "fh-sfo-account-conformance", "fh-sfo-account-regression"]
+      run: ["cargo", "test", "--workspace", "--no-run", "--all-targets"]
+    - id: contract-removed-symbol-scan
+      name: 旧中文消息/旧 patch/旧 fixture 密钥移除扫描
+      kind: removed-symbol-scan
+      assertion: no-unallowlisted-old-symbol-references
+      change_ids: ["fh-sfo-account-published-source", "fh-sfo-account-conformance", "fh-sfo-account-regression"]
+      run: ["python3", "harness/scripts/consumer-closure-check.py", "--version", "v0.1", "--module", "filehub", "--task-name", "054-switch-published-sfo-account"]
+levels:
+  unit:
+    mode: enabled
+    summary: 单元：session_key 32 字节校验分支、登录失败 err=9/10 与消息、refresh-only 解码回归
+    test_targets: [server/tests/unit/config.rs, server/tests/unit/account.rs]
+    preconditions:
+      tools: ["cargo"]
+      env: []
+      services: []
+      notes: [只运行 server 单元套件，避免并行干扰其它在制任务]
+    steps:
+      - id: sfo-account-unit
+        name: run filehub-server unit tests（config/account）
+        change_ids: ["fh-sfo-account-published-source", "fh-sfo-account-conformance", "fh-sfo-account-regression"]
+        run: ["cargo", "test", "--manifest-path", "server/Cargo.toml", "--test", "unit_tests"]
+  dv:
+    mode: enabled
+    summary: DV：32 字节 session_key 下登录/会话/项目主流程与失败流程
+    test_targets: [server/tests/dv_tests.rs]
+    preconditions:
+      tools: ["cargo"]
+      env: []
+      services: []
+      notes: []
+    steps:
+      - id: sfo-account-dv
+        name: run filehub-server DV tests
+        change_ids: ["fh-sfo-account-conformance", "fh-sfo-account-regression"]
+        run: ["cargo", "test", "--manifest-path", "server/Cargo.toml", "--test", "dv_tests"]
+  integration:
+    mode: enabled
+    summary: 集成：登录失败错误码/消息、限流英文消息、refresh-only、cli e2e 会话
+    test_targets: [server/tests/api_integration.rs, cli/tests/e2e_cli_server.rs]
+    preconditions:
+      tools: ["cargo"]
+      env: []
+      services: []
+      notes: [串行 + --nocapture，避免本工作树并行 502/EOF 干扰]
+    steps:
+      - id: sfo-account-api-integration
+        name: run filehub-server API integration tests
+        change_ids: ["fh-sfo-account-conformance", "fh-sfo-account-regression"]
+        run: ["cargo", "test", "--manifest-path", "server/Cargo.toml", "--test", "api_integration", "--", "--test-threads=1", "--nocapture"]
+      - id: sfo-account-cli-e2e
+        name: run filehub-cli e2e tests（32 字节 fixture 密钥）
+        change_ids: ["fh-sfo-account-conformance"]
+        run: ["cargo", "test", "--manifest-path", "cli/Cargo.toml", "--test", "e2e_cli_server", "--", "--test-threads=1", "--nocapture"]

@@ -30,7 +30,10 @@ pub fn atomic_write(path: &Path, content: &[u8]) -> Result<(), CredentialStoreEr
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or_default();
-    let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "config.toml".to_string());
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "config.toml".to_string());
     let tmp = parent.join(format!(".{file_name}.{}.{nanos}.tmp", std::process::id()));
     let result = write_and_sync(&tmp, content).and_then(|_| {
         set_min_permissions(&tmp)?;

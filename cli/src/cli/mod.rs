@@ -105,7 +105,13 @@ pub async fn run_cli() -> i32 {
         Ok(args) => args,
         Err(error) => {
             let _ = error.print();
-            return 1;
+            // 冻结文档约定 `--help`/`--version` 为成功（退出码 0）；
+            // 其余 clap 解析错误保持用法错误（退出码 1）。
+            return match error.kind() {
+                clap::error::ErrorKind::DisplayHelp
+                | clap::error::ErrorKind::DisplayVersion => 0,
+                _ => 1,
+            };
         }
     };
     let result = run_command(args).await;

@@ -8,16 +8,30 @@ use filehub_server::http::AppState;
 use filehub_server::model::{
     FileId, FilesConfig, HttpConfigSeed, ServerConfig, UserConfig, UsersConfig, Visibility,
 };
-use flate2::write::GzEncoder;
 use flate2::Compression;
+use flate2::write::GzEncoder;
+use sfo_account::AccountStore;
 use sha2::{Digest, Sha256};
 use sqlx::sqlite::SqlitePool;
-use sfo_account::AccountStore;
+
+pub const TEST_SESSION_PRIVATE_KEY: &str = "-----BEGIN PRIVATE KEY-----\n\
+MC4CAQAwBQYDK2VwBCIEIJGVLyTXHTLSMPclke6+1xCFTfX+TmVRcs6UNiMW35Ok\n\
+-----END PRIVATE KEY-----\n";
+
+/// 集成测试常用日志：每个测试 case 开头调用，保证 canonical 入口
+/// （`test-run.py filehub integration` + `--nocapture`）可见对应日志。
+pub fn log_case(name: &str) {
+    println!("[integration] start {name}");
+}
 
 pub fn sha256_hex(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
-    hasher.finalize().iter().map(|b| format!("{b:02x}")).collect()
+    hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 pub fn test_config(data_dir: &std::path::Path, db_path: &str) -> ServerConfig {
@@ -31,6 +45,8 @@ pub fn test_config(data_dir: &std::path::Path, db_path: &str) -> ServerConfig {
             expose_headers: vec![],
             max_age: 3600,
             support_credentials: false,
+            login_rate_limit_per_minute: 30,
+            login_rate_limit_window_secs: 60,
         },
         users: UsersConfig {
             users: vec![
@@ -38,16 +54,14 @@ pub fn test_config(data_dir: &std::path::Path, db_path: &str) -> ServerConfig {
                     username: "alice".to_string(),
                     password: Some("alice-pass".to_string()),
                     password_hash: None,
-                    role: Some("owner".to_string()),
                 },
                 UserConfig {
                     username: "bob".to_string(),
                     password: Some("bob-pass".to_string()),
                     password_hash: None,
-                    role: Some("member".to_string()),
                 },
             ],
-            session_key: "test-session-key-please-change".to_string(),
+            session_private_key: TEST_SESSION_PRIVATE_KEY.to_string(),
         },
         files: FilesConfig {
             data_dir: data_dir.to_path_buf(),
@@ -97,7 +111,9 @@ pub fn make_targz(name: &str, content: &[u8]) -> Vec<u8> {
             header.set_size(content.len() as u64);
             header.set_mode(0o644);
             header.set_cksum();
-            builder.append_data(&mut header, name, content).expect("tar entry");
+            builder
+                .append_data(&mut header, name, content)
+                .expect("tar entry");
             builder.finish().expect("tar finish");
         }
         encoder.write_all(&archive_buf).expect("gz write");
@@ -105,7 +121,12 @@ pub fn make_targz(name: &str, content: &[u8]) -> Vec<u8> {
     encoder.finish().expect("gz finish").into_inner()
 }
 
-pub fn make_project(project_id: i64, name: &str, visibility: Visibility, owner: i64) -> filehub_server::model::ProjectRecord {
+pub fn make_project(
+    project_id: i64,
+    name: &str,
+    visibility: Visibility,
+    owner: i64,
+) -> filehub_server::model::ProjectRecord {
     filehub_server::model::ProjectRecord {
         project_id: filehub_server::model::ProjectId(project_id),
         name: name.to_string(),

@@ -4,8 +4,8 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 
-use flate2::write::GzEncoder;
 use flate2::Compression;
+use flate2::write::GzEncoder;
 
 use super::ArchiveError;
 
@@ -25,7 +25,10 @@ pub fn is_safe_entry(path: &str, link_target: Option<&str>) -> bool {
     if normalized.starts_with('/') || normalized.contains(":/") {
         return false;
     }
-    if normalized.split('/').any(|segment| segment.is_empty() || matches!(segment, "." | "..")) {
+    if normalized
+        .split('/')
+        .any(|segment| segment.is_empty() || matches!(segment, "." | ".."))
+    {
         return false;
     }
     if let Some(target) = link_target {
@@ -41,7 +44,9 @@ pub fn is_safe_entry(path: &str, link_target: Option<&str>) -> bool {
 pub fn pack_directory(source: &Path, destination: &Path) -> Result<(), ArchiveError> {
     let root_name = source
         .file_name()
-        .ok_or_else(|| ArchiveError::Unsupported("目录根部没有可用的名字段，无法安全打包".to_string()))?
+        .ok_or_else(|| {
+            ArchiveError::Unsupported("目录根部没有可用的名字段，无法安全打包".to_string())
+        })?
         .to_string_lossy()
         .into_owned();
     let root_real = fs::canonicalize(source)
@@ -68,12 +73,15 @@ pub fn pack_directory(source: &Path, destination: &Path) -> Result<(), ArchiveEr
 
 /// 单文件打包：归档只含一个文件条目（以文件名为条目名）。
 pub fn pack_single_file(source: &Path, destination: &Path) -> Result<(), ArchiveError> {
-    let name = source
-        .file_name()
-        .ok_or_else(|| ArchiveError::Unsupported("文件没有可用的名字段，无法安全打包".to_string()))?;
+    let name = source.file_name().ok_or_else(|| {
+        ArchiveError::Unsupported("文件没有可用的名字段，无法安全打包".to_string())
+    })?;
     let rel = PathBuf::from(name.to_string_lossy().into_owned());
     if !is_safe_entry(&rel.to_string_lossy(), None) {
-        return Err(ArchiveError::Unsupported(format!("文件名不安全：{}", rel.display())));
+        return Err(ArchiveError::Unsupported(format!(
+            "文件名不安全：{}",
+            rel.display()
+        )));
     }
     let file = fs::File::create(destination)
         .map_err(|e| ArchiveError::LocalFs(format!("创建临时归档失败：{e}")))?;
@@ -108,15 +116,21 @@ fn walk_directory(
             .map_err(|e| ArchiveError::LocalFs(format!("读取条目类型失败：{e}")))?;
         if file_type.is_dir() {
             if !is_safe_entry(&format!("{rel_text}/"), None) {
-                return Err(ArchiveError::Unsupported(format!("目录条目不安全：{rel_text}")));
+                return Err(ArchiveError::Unsupported(format!(
+                    "目录条目不安全：{rel_text}"
+                )));
             }
             out.push(Entry::Dir(rel.clone()));
             walk_directory(&child_path, &rel, root_real, out)?;
         } else if file_type.is_symlink() {
             let target = fs::read_link(&child_path)
                 .map_err(|e| ArchiveError::LocalFs(format!("读取符号链接失败：{e}")))?;
-            let real_target = fs::canonicalize(&child_path)
-                .map_err(|e| ArchiveError::Unsupported(format!("越界/失效符号链接 {}：{e}", child_path.display())))?;
+            let real_target = fs::canonicalize(&child_path).map_err(|e| {
+                ArchiveError::Unsupported(format!(
+                    "越界/失效符号链接 {}：{e}",
+                    child_path.display()
+                ))
+            })?;
             if !real_target.starts_with(root_real) {
                 return Err(ArchiveError::Unsupported(format!(
                     "拒绝打包指向源目录树外的符号链接：{}",
@@ -125,7 +139,9 @@ fn walk_directory(
             }
             let stored_target = stored_link_target(prefix, &target, root_real);
             if !is_safe_entry(&rel_text, Some(&stored_target)) {
-                return Err(ArchiveError::Unsupported(format!("符号链接条目不安全：{rel_text}")));
+                return Err(ArchiveError::Unsupported(format!(
+                    "符号链接条目不安全：{rel_text}"
+                )));
             }
             out.push(Entry::Symlink {
                 path: rel,
@@ -133,7 +149,9 @@ fn walk_directory(
             });
         } else if file_type.is_file() {
             if !is_safe_entry(&rel_text, None) {
-                return Err(ArchiveError::Unsupported(format!("文件条目不安全：{rel_text}")));
+                return Err(ArchiveError::Unsupported(format!(
+                    "文件条目不安全：{rel_text}"
+                )));
             }
             out.push(Entry::File(rel));
         } else {
@@ -148,7 +166,9 @@ fn walk_directory(
 
 /// 把符号链接目标转为归档内部的相对路径（绝对/根内目标都收敛为相对）。
 fn stored_link_target(prefix: &Path, target: &Path, root_real: &Path) -> String {
-    let canonical = target.canonicalize().unwrap_or_else(|_| target.to_path_buf());
+    let canonical = target
+        .canonicalize()
+        .unwrap_or_else(|_| target.to_path_buf());
     let rel = match canonical.strip_prefix(root_real) {
         Ok(relative) => relative,
         Err(_) => {
@@ -181,7 +201,8 @@ fn stored_link_target(prefix: &Path, target: &Path, root_real: &Path) -> String 
     };
     // 从链接所在目录（from）到目标（target_parts）的相对路径。
     let mut common = 0;
-    while common < from.len() && common < target_parts.len() && from[common] == target_parts[common] {
+    while common < from.len() && common < target_parts.len() && from[common] == target_parts[common]
+    {
         common += 1;
     }
     let mut relative = PathBuf::new();
@@ -194,12 +215,18 @@ fn stored_link_target(prefix: &Path, target: &Path, root_real: &Path) -> String 
     relative.to_string_lossy().into_owned()
 }
 
-fn append_entry<W: Write>(builder: &mut tar::Builder<W>, entry: &Entry, source_root: &Path) -> Result<(), ArchiveError> {
+fn append_entry<W: Write>(
+    builder: &mut tar::Builder<W>,
+    entry: &Entry,
+    source_root: &Path,
+) -> Result<(), ArchiveError> {
     match entry {
         Entry::Dir(rel) => {
             let path_text = format!("{}/", rel.to_string_lossy());
             if !is_safe_entry(&path_text, None) {
-                return Err(ArchiveError::Unsupported(format!("目录条目不安全：{path_text}")));
+                return Err(ArchiveError::Unsupported(format!(
+                    "目录条目不安全：{path_text}"
+                )));
             }
             let mut header = tar::Header::new_gnu();
             header.set_entry_type(tar::EntryType::dir());
@@ -214,7 +241,9 @@ fn append_entry<W: Write>(builder: &mut tar::Builder<W>, entry: &Entry, source_r
         Entry::File(rel) => {
             let path_text = rel.to_string_lossy().into_owned();
             if !is_safe_entry(&path_text, None) {
-                return Err(ArchiveError::Unsupported(format!("文件条目不安全：{path_text}")));
+                return Err(ArchiveError::Unsupported(format!(
+                    "文件条目不安全：{path_text}"
+                )));
             }
             let file_path = if source_root.is_dir() {
                 // 归档内 rel 带根目录名前缀，打开时去掉该前缀。
@@ -226,8 +255,9 @@ fn append_entry<W: Write>(builder: &mut tar::Builder<W>, entry: &Entry, source_r
             } else {
                 source_root.to_path_buf()
             };
-            let mut file = fs::File::open(&file_path)
-                .map_err(|e| ArchiveError::LocalFs(format!("打开 {} 失败：{e}", file_path.display())))?;
+            let mut file = fs::File::open(&file_path).map_err(|e| {
+                ArchiveError::LocalFs(format!("打开 {} 失败：{e}", file_path.display()))
+            })?;
             let size = file
                 .metadata()
                 .map_err(|e| ArchiveError::LocalFs(format!("读取元数据失败：{e}")))?
@@ -245,14 +275,17 @@ fn append_entry<W: Write>(builder: &mut tar::Builder<W>, entry: &Entry, source_r
         Entry::Symlink { path, target } => {
             let path_text = path.to_string_lossy().into_owned();
             if !is_safe_entry(&path_text, Some(target)) {
-                return Err(ArchiveError::Unsupported(format!("符号链接条目不安全：{path_text}")));
+                return Err(ArchiveError::Unsupported(format!(
+                    "符号链接条目不安全：{path_text}"
+                )));
             }
             let mut header = tar::Header::new_gnu();
             header.set_entry_type(tar::EntryType::symlink());
             header.set_mode(0o777);
             header.set_mtime(0);
             header.set_size(0);
-            header.set_link_name(target.as_str())
+            header
+                .set_link_name(target.as_str())
                 .map_err(|e| ArchiveError::LocalFs(format!("设置链接目标失败：{e}")))?;
             header.set_cksum();
             builder
@@ -275,7 +308,9 @@ fn display(entry: &Entry) -> String {
 #[allow(dead_code)]
 fn path_has_escape(rel: &Path) -> bool {
     rel.components().any(|component| {
-        matches!(component, Component::ParentDir | Component::RootDir | Component::Prefix(_))
-            || matches!(component, Component::CurDir)
+        matches!(
+            component,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_)
+        ) || matches!(component, Component::CurDir)
     })
 }

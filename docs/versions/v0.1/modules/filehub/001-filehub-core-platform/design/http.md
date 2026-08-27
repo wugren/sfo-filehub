@@ -38,7 +38,7 @@ classDiagram
 // 装配配置：main.rs 从配置文件装载，来源与格式在实现期锁定
 pub struct ServerConfig {
     pub http: HttpConfigSeed,    // [server] 文件 DTO（反序列化用）；main.rs 转为 sfo-http HttpServerConfig
-    pub users: UsersConfig,      // [users]：账号 + role（permissions 消费）
+    pub users: UsersConfig,      // [users]：账号（用户名、密码或密码哈希），无角色字段
     pub files: FilesConfig,      // [files]：data_dir、max_archive_bytes
 }
 pub struct HttpConfigSeed {

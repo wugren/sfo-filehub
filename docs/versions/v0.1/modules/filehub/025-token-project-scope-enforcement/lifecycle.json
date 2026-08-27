@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "stages": {
+    "acceptance": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/025-token-project-scope-enforcement/acceptance-report.md": "adf0073612792fce3abe52c002965cbd39179ab2e4851dc3fa946e8f5488998b"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "06850523d11443a52b44a8eec09ce6cdf1f3cffe90366f44fa0d00fce450857c"
+    },
+    "design": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/025-token-project-scope-enforcement/design.md": "65a3490f461d4a7479d35d46abc43d786aa7b98285a77a1cff249e7d8b3fdc2a",
+        "docs/versions/v0.1/modules/filehub/025-token-project-scope-enforcement/risk-profile.yaml": "4ff6a695927baaef8becf02242bf4ef882adad799a283bbaae1131ad0af039c3"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "06850523d11443a52b44a8eec09ce6cdf1f3cffe90366f44fa0d00fce450857c"
+    },
+    "implementation": {
+      "inputs": {},
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "06850523d11443a52b44a8eec09ce6cdf1f3cffe90366f44fa0d00fce450857c"
+    },
+    "proposal": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/025-token-project-scope-enforcement/proposal.md": "77fb00559cb7415b7e2229a872a9c203ea3c8a7743e6c5891b702de430f54fb3"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "06850523d11443a52b44a8eec09ce6cdf1f3cffe90366f44fa0d00fce450857c"
+    },
+    "testing": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/025-token-project-scope-enforcement/testing.md": "43d8966035513d3f0fcea4aee6784905e0a29ac54b9bf5743f5b87c18da63a02",
+        "docs/versions/v0.1/modules/filehub/025-token-project-scope-enforcement/testplan.yaml": "95bbf5a516640002a1e251e25f336b53a6dcdc441c79e2a5e579676b15136070"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "06850523d11443a52b44a8eec09ce6cdf1f3cffe90366f44fa0d00fce450857c",
+      "test_run": ".harness/test-results/test-runs/20260823T093746Z-filehub+025-token-project-scope-enforcement-all.json",
+      "test_run_sha256": "34e7f8f7b7a0a7f0d51ce569bb41e6940d3abbb480c71ee59839ee7d30856d13"
+    }
+  },
+  "task_manifest": "task.yaml"
+}

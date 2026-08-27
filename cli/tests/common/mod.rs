@@ -7,6 +7,12 @@ use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
+/// 集成测试常用日志：每个测试 case 开头调用，保证 canonical 入口
+/// （`test-run.py filehub integration` + `--nocapture`）可见对应日志。
+pub fn log_case(name: &str) {
+    println!("[integration] start {name}");
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     /// 正常行为：s1/s2/s3 会话与 tok-valid/tok-view token 均有效。
@@ -45,7 +51,7 @@ struct App {
 }
 
 const SESSIONS: [&str; 3] = ["s1", "s2", "s3"];
-const VALID_TOKENS: [&str; 2] = ["tok-valid", "tok-view"];
+const VALID_TOKENS: [&str; 3] = ["tok-valid", "tok-view", "tok-paged"];
 
 impl MockServer {
     /// 启动 mock 服务；`payload` 同时用作版本元数据里的 sha256 与下载流。
@@ -115,6 +121,10 @@ async fn serve(
     let method = parts.next().unwrap_or("").to_string();
     let raw_path = parts.next().unwrap_or("").to_string();
     let path = raw_path.split('?').next().unwrap_or("").to_string();
+    let query = raw_path
+        .split_once('?')
+        .map(|(_, query)| query.to_string())
+        .unwrap_or_default();
     let mut headers = HashMap::new();
     for line in lines {
         if let Some((key, value)) = line.split_once(':') {
@@ -155,7 +165,15 @@ async fn serve(
                 .map(|value| value.trim_matches('"').to_string())
         })
     });
-    let response = route(&app, &method, &path, &bearer, &body, boundary.as_deref());
+    let response = route(
+        &app,
+        &method,
+        &path,
+        &query,
+        &bearer,
+        &body,
+        boundary.as_deref(),
+    );
     write_response(&mut stream, response).await?;
     Ok(())
 }
@@ -174,6 +192,7 @@ fn looks_like_http_request(head: &[u8]) -> bool {
 struct Response {
     status: &'static str,
     content_type: String,
+    headers: Vec<(String, String)>,
     body: Vec<u8>,
 }
 
@@ -181,6 +200,23 @@ fn json_response(status: &'static str, payload: serde_json::Value) -> Response {
     Response {
         status,
         content_type: "application/json".to_string(),
+        headers: Vec::new(),
+        body: serde_json::to_vec(&payload).unwrap_or_default(),
+    }
+}
+
+fn json_response_with_headers(
+    status: &'static str,
+    payload: serde_json::Value,
+    headers: &[(&str, String)],
+) -> Response {
+    Response {
+        status,
+        content_type: "application/json".to_string(),
+        headers: headers
+            .iter()
+            .map(|(key, value)| ((*key).to_string(), value.clone()))
+            .collect(),
         body: serde_json::to_vec(&payload).unwrap_or_default(),
     }
 }
@@ -196,6 +232,7 @@ fn route(
     app: &App,
     method: &str,
     path: &str,
+    query: &str,
     bearer: &str,
     body: &[u8],
     boundary: Option<&str>,
@@ -243,12 +280,32 @@ fn route(
             {
                 return error_response("401 Unauthorized", "unauthorized", "session expired once");
             }
-            json_response(
+            let all: Vec<serde_json::Value> = if bearer == "tok-paged" {
+                (1..=520)
+                    .map(|id| {
+                        serde_json::json!({
+                            "project_id": id,
+                            "name": format!("pg-{id}"),
+                            "visibility": "public",
+                            "owner": 1
+                        })
+                    })
+                    .collect()
+            } else {
+                vec![
+                    serde_json::json!({"project_id": 1, "name": "demo", "visibility": "public", "owner": 1}),
+                    serde_json::json!({"project_id": 2, "name": "refresh-once", "visibility": "public", "owner": 1}),
+                ]
+            };
+            let total = all.len();
+            let limit = parse_query_u32(query, "limit").unwrap_or(total as u32);
+            let offset = parse_query_u32(query, "offset").unwrap_or(0) as usize;
+            let page: Vec<serde_json::Value> =
+                all.into_iter().skip(offset).take(limit as usize).collect();
+            json_response_with_headers(
                 "200 OK",
-                serde_json::json!([
-                    {"project_id": 1, "name": "demo", "visibility": "public", "owner": 1},
-                    {"project_id": 2, "name": "refresh-once", "visibility": "public", "owner": 1}
-                ]),
+                serde_json::Value::Array(page),
+                &[("x-total-count", total.to_string())],
             )
         }
         ("POST", ["api", "v1", "projects", _id, "versions"]) => {
@@ -355,6 +412,7 @@ fn route(
             Response {
                 status: "204 No Content",
                 content_type: "application/json".to_string(),
+                headers: Vec::new(),
                 body: Vec::new(),
             }
         }
@@ -420,6 +478,7 @@ fn route(
             Response {
                 status: "200 OK",
                 content_type: "application/gzip".to_string(),
+                headers: Vec::new(),
                 body,
             }
         }
@@ -572,8 +631,19 @@ async fn write_response(
     stream: &mut TcpStream,
     response: Response,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let extra_headers = response
+        .headers
+        .iter()
+        .map(|(key, value)| format!("{key}: {value}"))
+        .collect::<Vec<_>>()
+        .join("\r\n");
+    let extra = if extra_headers.is_empty() {
+        String::new()
+    } else {
+        format!("{extra_headers}\r\n")
+    };
     let head = format!(
-        "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 {}\r\nContent-Type: {}\r\n{extra}Content-Length: {}\r\nConnection: close\r\n\r\n",
         response.status,
         response.content_type,
         response.body.len()
@@ -582,6 +652,13 @@ async fn write_response(
     stream.write_all(&response.body).await?;
     stream.flush().await?;
     Ok(())
+}
+
+fn parse_query_u32(query: &str, key: &str) -> Option<u32> {
+    query.split('&').find_map(|pair| {
+        let (name, value) = pair.split_once('=')?;
+        (name == key).then(|| value.parse::<u32>().ok()).flatten()
+    })
 }
 
 /// 生成一个可被 CLI 校验通过的 `.tar.gz` 载荷。

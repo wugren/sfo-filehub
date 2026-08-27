@@ -46,6 +46,11 @@ export interface Project {
   owner: number;
 }
 
+export interface ProjectPage {
+  items: Project[];
+  total: number;
+}
+
 export interface Collaborator {
   user_id: number;
   role: ProjectRole;
@@ -86,7 +91,6 @@ export interface TokenUpdateInput {
   name?: string;
   project_scope?: ProjectScopeDto;
   scopes?: Scope[];
-  expires_at?: string | null;
 }
 
 export interface VersionRecord {

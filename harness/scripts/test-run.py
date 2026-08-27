@@ -49,14 +49,17 @@ CONTRACT_ASSERTIONS = {
 # commands, then de-duplicate identical argv. This keeps newly registered
 # level-specific regressions reachable even when an older `all` suite exists.
 MODULE_SUITES: dict[str, dict[str, list[list[str]]]] = {
-    # Greenfield placeholder: sfo-filehub has no production module tests yet.
-    # `filehub all` runs the Harness self-check as the repository smoke gate.
-    # Replace unit/dv/integration with the real module suites as tests land;
-    # keep `all` composing all four levels so regressions stay reachable.
     "filehub": {
         "unit": [],
         "dv": [],
-        "integration": [],
+        "integration": [
+            # 统一串行并 --nocapture：server 16 路并行偶发 502，且每个
+            # integration 测试 case 都输出日志，串行避免日志交织。
+            ["cargo", "test", "-p", "filehub-server", "--test", "api_integration", "--", "--test-threads=1", "--nocapture"],
+            ["cargo", "test", "-p", "filehub-cli", "--test", "api_integration", "--", "--test-threads=1", "--nocapture"],
+            ["cargo", "test", "-p", "filehub-cli", "--test", "cmd_integration", "--", "--test-threads=1", "--nocapture"],
+            ["cargo", "test", "-p", "filehub-cli", "--test", "e2e_cli_server", "--", "--test-threads=1", "--nocapture"],
+        ],
         "all": [["uv", "run", "--cache-dir", ".harness/uv-cache", "--active", "python", "harness/scripts/harness-self-check.py"]],
     },
 }

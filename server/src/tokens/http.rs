@@ -1,17 +1,22 @@
 //! tokens 的 HTTP 接口（sfo-http；P-03）。
 
 use http::{Method, StatusCode};
-use sfo_http::http_server::{HttpServer, Request, Response};
 use serde::Deserialize;
+use sfo_http::http_server::{Request, Response};
 use std::sync::Arc;
 
-use crate::contract::{api_error_response, empty_response, json_body, json_ok, path_param, AuthProvider, ApiError};
-use crate::model::{TokenId, UserId};
-use super::model::{TokenCreateRequest, TokenError, TokenErrorKind, TokenUpdateRequest};
 use super::TokenService;
+use super::model::{TokenCreateRequest, TokenError, TokenErrorKind, TokenUpdateRequest};
+use crate::contract::{
+    ApiError, AuthProvider, api_error_response, empty_response, json_body, json_ok, path_param,
+};
+use crate::model::{TokenId, UserId};
 
-pub fn register<S, Req, Resp>(server: &mut S, tokens: Arc<dyn TokenService>, auth: Arc<AuthProvider>)
-where
+pub fn register<S, Req, Resp>(
+    server: &mut S,
+    tokens: Arc<dyn TokenService>,
+    auth: Arc<AuthProvider>,
+) where
     S: sfo_http::http_server::HttpServer<Req, Resp>,
     Req: Request + Sync,
     Resp: Response,
@@ -51,70 +56,73 @@ where
 
     let tokens_patch = tokens.clone();
     let auth_patch = auth.clone();
-    server.serve("/api/v1/tokens/{token_id}", Method::POST, move |req: Req| {
-        let tokens = tokens_patch.clone();
-        let auth = auth_patch.clone();
-        async move {
-            let principal = crate::api_try!(auth.require_user_req(&req).await);
-            let owner = crate::api_try!(require_owner(&principal));
-            let token_id = crate::api_try!(path_param::<Req, TokenId>(&req, "token_id"));
-            let mut req = req;
-            let patch: TokenUpdateRequest = crate::api_try!(json_body(&mut req).await);
-            match tokens.update(&token_id, &owner, patch).await {
-                Ok(Some(issued)) => json_ok(StatusCode::OK, &issued),
-                Ok(None) => {
-                    let mut list = match tokens.list(&owner).await {
-                        Ok(list) => list,
-                        Err(e) => return api_error_response(&token_error_to_api(&e)),
-                    };
-                    list.retain(|t| t.token_id == token_id);
-                    match list.into_iter().next() {
-                        Some(summary) => json_ok(StatusCode::OK, &summary),
-                        None => api_error_response(&ApiError::not_found("token not found")),
-                    }
+    server.serve(
+        "/api/v1/tokens/{token_id}",
+        Method::POST,
+        move |req: Req| {
+            let tokens = tokens_patch.clone();
+            let auth = auth_patch.clone();
+            async move {
+                let principal = crate::api_try!(auth.require_user_req(&req).await);
+                let owner = crate::api_try!(require_owner(&principal));
+                let token_id = crate::api_try!(path_param::<Req, TokenId>(&req, "token_id"));
+                let mut req = req;
+                let patch: TokenUpdateRequest = crate::api_try!(json_body(&mut req).await);
+                match tokens.update(&token_id, &owner, patch).await {
+                    Ok(summary) => json_ok(StatusCode::OK, &summary),
+                    Err(e) => api_error_response(&token_error_to_api(&e)),
                 }
-                Err(e) => api_error_response(&token_error_to_api(&e)),
             }
-        }
-    });
+        },
+    );
 
     let tokens_rotate = tokens.clone();
     let auth_rotate = auth.clone();
-    server.serve("/api/v1/tokens/{token_id}/rotate", Method::POST, move |req: Req| {
-        let tokens = tokens_rotate.clone();
-        let auth = auth_rotate.clone();
-        async move {
-            let principal = crate::api_try!(auth.require_user_req(&req).await);
-            let owner = crate::api_try!(require_owner(&principal));
-            let token_id = crate::api_try!(path_param::<Req, TokenId>(&req, "token_id"));
-            match tokens.rotate(&token_id, &owner).await {
-                Ok(issued) => json_ok(StatusCode::OK, &issued),
-                Err(e) => api_error_response(&token_error_to_api(&e)),
+    server.serve(
+        "/api/v1/tokens/{token_id}/rotate",
+        Method::POST,
+        move |req: Req| {
+            let tokens = tokens_rotate.clone();
+            let auth = auth_rotate.clone();
+            async move {
+                let principal = crate::api_try!(auth.require_user_req(&req).await);
+                let owner = crate::api_try!(require_owner(&principal));
+                let token_id = crate::api_try!(path_param::<Req, TokenId>(&req, "token_id"));
+                match tokens.rotate(&token_id, &owner).await {
+                    Ok(issued) => json_ok(StatusCode::OK, &issued),
+                    Err(e) => api_error_response(&token_error_to_api(&e)),
+                }
             }
-        }
-    });
+        },
+    );
 
     let tokens_revoke = tokens.clone();
     let auth_revoke = auth.clone();
-    server.serve("/api/v1/tokens/{token_id}", Method::DELETE, move |req: Req| {
-        let tokens = tokens_revoke.clone();
-        let auth = auth_revoke.clone();
-        async move {
-            let principal = crate::api_try!(auth.require_user_req(&req).await);
-            let owner = crate::api_try!(require_owner(&principal));
-            let token_id = crate::api_try!(path_param::<Req, TokenId>(&req, "token_id"));
-            match tokens.revoke(&token_id, &owner).await {
-                Ok(()) => empty_response(StatusCode::NO_CONTENT),
-                Err(e) => api_error_response(&token_error_to_api(&e)),
+    server.serve(
+        "/api/v1/tokens/{token_id}",
+        Method::DELETE,
+        move |req: Req| {
+            let tokens = tokens_revoke.clone();
+            let auth = auth_revoke.clone();
+            async move {
+                let principal = crate::api_try!(auth.require_user_req(&req).await);
+                let owner = crate::api_try!(require_owner(&principal));
+                let token_id = crate::api_try!(path_param::<Req, TokenId>(&req, "token_id"));
+                match tokens.revoke(&token_id, &owner).await {
+                    Ok(()) => empty_response(StatusCode::NO_CONTENT),
+                    Err(e) => api_error_response(&token_error_to_api(&e)),
+                }
             }
-        }
-    });
+        },
+    );
 }
 
 fn require_owner(principal: &crate::model::Principal) -> Result<UserId, ApiError> {
     match principal {
-        crate::model::Principal::User { user_id, .. } => Ok(*user_id),
-        _ => Err(ApiError::forbidden("token management requires a user session")),
+        crate::model::Principal::User { user_id } => Ok(*user_id),
+        _ => Err(ApiError::forbidden(
+            "token management requires a user session",
+        )),
     }
 }
 
@@ -122,6 +130,7 @@ fn token_error_to_api(err: &TokenError) -> ApiError {
     match err.kind {
         TokenErrorKind::NotFound => ApiError::not_found(&err.message),
         TokenErrorKind::InvalidInput => ApiError::invalid_input(&err.message),
+        TokenErrorKind::Conflict => ApiError::conflict(&err.message),
         TokenErrorKind::Db => ApiError::server(&err.message),
     }
 }

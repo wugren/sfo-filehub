@@ -1,0 +1,58 @@
+schema_version: 1
+task_manifest: task.yaml
+
+# `risk-profile-check.py --prepare` 会刷新下列 task/change 与源码绑定；
+# 提案/设计变更后必须重新 prepare 并复核七类判定。
+change_ids: ["fh-token-update-no-resign", "fh-token-explicit-resign-action", "fh-token-no-resign-regression-tests"]
+source_bindings:
+  proposal: proposal.md
+  design_source: design.md
+
+risks:
+  contract:
+    applies: true
+    evidence:
+      - server/src/tokens/model.rs
+      - server/src/tokens/service.rs
+      - server/src/tokens/http.rs
+      - admin-web/src/api/contract.ts
+      - admin-web/src/api/client.ts
+      - docs/api/v1-contract.md
+    required_checks:
+      - POST /api/v1/tokens/{id} 属性修改只返回 TokenSummary，不再返回/签发新 JWT；TokenUpdateRequest 不再接受 expires_at
+      - 前端 updateToken 返回类型收敛为 TokenSummary，编辑保存不展示 JWT
+  data:
+    applies: false
+    evidence: "不新增/修改表结构与迁移；仍只读写既有 tokens（project_scope/public_key_pem）与 token_scopes 表。"
+    required_checks: []
+  security:
+    applies: true
+    evidence:
+      - server/src/tokens/service.rs
+      - server/src/tokens/model.rs
+      - server/src/http/auth.rs
+      - admin-web/src/pages/TokensPage.tsx
+    required_checks:
+      - 属性修改不重签：旧 JWT 副本继续有效，权限变更立即按数据库生效；有限期 JWT 的 exp 保持不变
+      - 显式重签（rotate）才更换验签公钥并使旧 JWT 立即失效，且新 JWT 一次性展示
+      - 属性修改路径不得再执行 generate_keypair/sign，避免意外签发无 exp 或新 exp 的 JWT
+  runtime:
+    applies: false
+    evidence: "仅改变 update 的持久化/返回路径与前端交互，不引入新并发、生命周期、重试或运行集成边界。"
+    required_checks: []
+  build:
+    applies: false
+    evidence: "不修改依赖、构建图、产物、发布/部署面或默认配置。"
+    required_checks: []
+  ui:
+    applies: true
+    evidence:
+      - admin-web/src/pages/TokensPage.tsx
+      - admin-web/src/i18n/messages.ts
+    required_checks:
+      - 编辑弹窗移除有效期选择与「修改即重签」警告，文案明确属性修改不重签
+      - 列表行存在显式「重新签发」按钮与确认对话框，仅点击才触发重签
+  harness:
+    applies: false
+    evidence: "本任务不修改 Harness 规则、检查器或测试基础设施。"
+    required_checks: []

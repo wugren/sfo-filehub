@@ -1,11 +1,9 @@
--- 归属：permissions 子模块（P-02）。账号角色与项目协作角色，授权以项目为载体。
-CREATE TABLE IF NOT EXISTS account_roles (
-    user_id INTEGER PRIMARY KEY,
-    role TEXT NOT NULL CHECK (role IN ('owner', 'member'))
-);
+-- 归属：permissions 子模块（P-02）。项目协作角色，授权以项目为载体；项目 owner
+-- 由 projects.owner 隐式持有，不写入本表。
+-- project_id 外键级联：项目删除时自动清除授权（新库生效；存量库由服务层显式清理兜底）。
 CREATE TABLE IF NOT EXISTS project_grants (
-    project_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id),
     role TEXT NOT NULL CHECK (role IN ('read', 'write', 'admin')),
     PRIMARY KEY (project_id, user_id)
 );

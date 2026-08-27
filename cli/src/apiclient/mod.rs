@@ -174,11 +174,29 @@ impl FilehubClient {
             .ok_or_else(|| ClientError::Transport("续期响应缺少 result 字段".to_string()))
     }
 
+    /// 拉取全部可见项目：按 `?limit/offset` 分页循环，用 `X-Total-Count` 驱动；
+    /// 旧服务端/无总量头时回退单页（等价于既有语义）。
     pub async fn list_projects(&self, bearer: &str) -> Result<Vec<ProjectDto>, ClientError> {
-        let (status, bytes) = self.get_json("/api/v1/projects", bearer).await?;
-        let body = ensure_success(status, bytes.to_vec())?;
-        serde_json::from_slice(&body)
-            .map_err(|e| ClientError::Transport(format!("解析项目列表失败：{e}")))
+        const PAGE_LIMIT: u32 = 500;
+        let mut projects = Vec::new();
+        let mut offset = 0u32;
+        loop {
+            let suffix = format!("/api/v1/projects?limit={PAGE_LIMIT}&offset={offset}");
+            let (status, bytes, total) = self.get_json_page(&suffix, bearer).await?;
+            let body = ensure_success(status, bytes.to_vec())?;
+            let page: Vec<ProjectDto> = serde_json::from_slice(&body)
+                .map_err(|e| ClientError::Transport(format!("解析项目列表失败：{e}")))?;
+            let page_len = page.len() as u32;
+            projects.extend(page);
+            let Some(total) = total else {
+                break;
+            };
+            if page_len == 0 || projects.len() as u64 >= total {
+                break;
+            }
+            offset = offset.saturating_add(page_len);
+        }
+        Ok(projects)
     }
 
     /// 按项目名精确匹配解析项目；未找到/重名按 InvalidInput 处理。
@@ -442,6 +460,31 @@ impl FilehubClient {
             .await
             .map_err(|e| ClientError::Transport(format!("读取响应失败：{e}")))?;
         Ok((status, bytes.to_vec()))
+    }
+
+    /// 与 `get_json` 相同，额外解析 `X-Total-Count` 响应头（缺失/非法为 None）。
+    async fn get_json_page(
+        &self,
+        suffix: &str,
+        bearer: &str,
+    ) -> Result<(StatusCode, Vec<u8>, Option<u64>), ClientError> {
+        let response = self
+            .send_with_fallback("请求失败", |base| {
+                let base = base.to_string();
+                async move { Ok(self.http.get(format!("{base}{suffix}")).bearer_auth(bearer)) }
+            })
+            .await?;
+        let total = response
+            .headers()
+            .get("x-total-count")
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse::<u64>().ok());
+        let status = response.status();
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| ClientError::Transport(format!("读取响应失败：{e}")))?;
+        Ok((status, bytes.to_vec(), total))
     }
 }
 

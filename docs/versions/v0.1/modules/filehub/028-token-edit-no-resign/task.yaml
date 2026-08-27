@@ -1,0 +1,39 @@
+schema_version: 1
+
+# 用户 2026-08-24 回复「确认，自动完成」，确认采纳提案并按 high-risk 自动
+# 执行完整分层流程（design -> implementation -> testing -> acceptance）。
+workflow_tier: high-risk
+
+version: v0.1
+packet_module: filehub
+task_name: 028-token-edit-no-resign
+stage: acceptance
+mode: manual
+auto_pipeline_start_stage:
+
+proposal: proposal.md
+completion_report: completion-report.md
+change_record: docs/changes/028-token-edit-no-resign.md
+design: design.md
+testing: testing.md
+testplan: testplan.yaml
+acceptance_report: acceptance-report.md
+pipeline_plan: pipeline/plan.md
+risk_profile: risk-profile.yaml
+lifecycle_state: lifecycle.json
+changed_paths_file: .harness/evidence/v0.1/stage-scope/028-token-edit-no-resign.paths
+baseline_manifest:
+
+changes:
+  - id: fh-token-update-no-resign
+    target_module: filehub
+    scope_paths: [server/src/tokens/model.rs, server/src/tokens/mod.rs, server/src/tokens/service.rs, server/src/tokens/http.rs, docs/api/v1-contract.md]
+    changed_paths_file:
+  - id: fh-token-explicit-resign-action
+    target_module: filehub
+    scope_paths: [admin-web/src/api/contract.ts, admin-web/src/api/client.ts, admin-web/src/pages/TokensPage.tsx, admin-web/src/i18n/messages.ts]
+    changed_paths_file:
+  - id: fh-token-no-resign-regression-tests
+    target_module: filehub
+    scope_paths: [server/tests/unit/tokens.rs, admin-web/tests/]
+    changed_paths_file:

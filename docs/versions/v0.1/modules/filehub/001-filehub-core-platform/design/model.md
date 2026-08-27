@@ -17,7 +17,7 @@ approved_content_sha256: 2e9b8e32d140507b00892b82bb344cfa6a74d3c2cfa7ef572fb2cbf
 ## Design Scope
 
 - 归属：`filehub-server` crate 内 `server/src/model/` 共享子 mod。
-- 覆盖：跨子模块复用的值类型与配置 DTO——`UserId`/`ProjectId`/`TokenId`/`FileId` 标识、`AccountRole`/`ProjectRole` 角色、`Scope`/`ProjectScope`/`ScopeSet`/`Visibility`、`Principal`/`Resource`、跨模块记录（`CurrentUser`/`ProjectRecord`/`VersionRecord`/`FileRecord`/`Collaborator`/`TokenSummary`/`TokenIssued`）以及装配配置（`UsersConfig`/`ServerConfig`/`FilesConfig`/`HttpConfigSeed`）。
+- 覆盖：跨子模块复用的值类型与配置 DTO——`UserId`/`ProjectId`/`TokenId`/`FileId` 标识、项目角色 `ProjectRole`、`Scope`/`ProjectScope`/`ScopeSet`/`Visibility`、`Principal`/`Resource`、跨模块记录（`CurrentUser`/`ProjectRecord`/`VersionRecord`/`FileRecord`/`Collaborator`/`TokenSummary`/`TokenIssued`）以及装配配置（`UsersConfig`/`ServerConfig`/`FilesConfig`/`HttpConfigSeed`）。
 - 不覆盖：任何业务逻辑、持久化状态、HTTP 路由或 sfo-http 依赖。
 
 ## Module Relationship UML
@@ -57,8 +57,7 @@ pub struct TokenId(pub i64);
 pub struct FileId(pub String); // 文件标识 = uuid 字符串
 
 // server/src/model/role.rs
-pub enum AccountRole { Owner, Member }          // 缺省 Member
-pub enum ProjectRole { Read, Write, Admin }
+pub enum ProjectRole { Read, Write, Admin }     // 项目协作者角色；owner 由 projects.owner 隐式持有
 
 // server/src/model/scope.rs：token 权限与项目可见性
 pub enum Scope { MetadataRead, ArtifactsRead, ArtifactsWrite, Administration, ProjectsCreate, ProjectsDelete }
@@ -69,7 +68,7 @@ pub enum Visibility { Public, Private }
 // server/src/model/principal.rs：认证/授权统一输入
 pub enum Principal {
   Anonymous,
-  User { user_id: UserId, account_role: AccountRole },
+  User { user_id: UserId },
   Token { token_id: TokenId, scopes: ScopeSet, user_id: UserId },
 }
 pub enum Resource { Project(ProjectId), Feature(FeatureName) }

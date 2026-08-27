@@ -453,6 +453,24 @@ a:hover {
   flex-shrink: 0;
 }
 
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  position: sticky;
+  bottom: 0;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  padding-bottom: 12px;
+  margin-top: 4px;
+}
+
+.pager-info {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
 .page-body {
   flex: 1;
   min-height: 0;

@@ -1,19 +1,26 @@
 use serde::{Deserialize, Serialize};
 
-use super::{AccountRole, ProjectId, ScopeSet, TokenId, UserId};
+use super::{ProjectId, ProjectScope, ScopeSet, TokenId, UserId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Principal {
     Anonymous,
-    User { user_id: UserId, account_role: AccountRole },
-    Token { token_id: TokenId, scopes: ScopeSet, user_id: UserId },
+    User {
+        user_id: UserId,
+    },
+    Token {
+        token_id: TokenId,
+        scopes: ScopeSet,
+        user_id: UserId,
+        project_scope: ProjectScope,
+    },
 }
 
 impl Principal {
     pub fn user_id(&self) -> Option<UserId> {
         match self {
             Principal::Anonymous => None,
-            Principal::User { user_id, .. } | Principal::Token { user_id, .. } => Some(*user_id),
+            Principal::User { user_id } | Principal::Token { user_id, .. } => Some(*user_id),
         }
     }
 
@@ -29,14 +36,12 @@ impl Principal {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum FeatureName {
     ProjectsCreate,
-    ProjectsDelete,
 }
 
 impl FeatureName {
     pub fn as_str(&self) -> &'static str {
         match self {
             FeatureName::ProjectsCreate => "projects:create",
-            FeatureName::ProjectsDelete => "projects:delete",
         }
     }
 }

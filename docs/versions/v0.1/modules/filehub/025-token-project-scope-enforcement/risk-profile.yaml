@@ -1,0 +1,47 @@
+schema_version: 1
+task_manifest: task.yaml
+
+# `risk-profile-check.py --prepare` 会刷新下列 task/change 与源码绑定；
+# 提案/设计变更后必须重新 prepare 并复核七类判定。
+change_ids: ["fh-token-permissions-server-side", "fh-token-project-scope-enforce", "fh-token-project-scope-tests"]
+source_bindings:
+  proposal: proposal.md
+  design_source: design.md
+
+risks:
+  contract:
+    applies: false
+    evidence: "JWT 为服务端唯一签发/消费的不透明凭据，管理端与 CLI 只透传、不解析 claims；本任务移除 scopes claim 且不新增 project_scope claim，无第三方消费者，且当前用户明确要求不考虑兼容。"
+    required_checks: []
+  data:
+    applies: false
+    evidence: "不新增/修改表结构或迁移；仅改变既有列 tokens.project_scope 与既有表 token_scopes 在 resolve 路径的读取与使用（由 claims 改为数据库权威）。"
+    required_checks: []
+  security:
+    applies: true
+    evidence:
+      - server/src/tokens/service.rs
+      - server/src/tokens/model.rs
+      - server/src/http/auth.rs
+      - server/src/model/principal.rs
+      - server/src/permissions/checker.rs
+    required_checks:
+      - resolve 必须从数据库 tokens.project_scope 与 token_scopes 构造 TokenPrincipal，JWT claims 不再作为权限来源
+      - checker 对 Principal::Token 访问 Project 资源必须先校验 project_scope 包含目标项目（fail closed）
+      - JWT 载荷（TokenPayload）不得再包含 scopes 权限字段，也不新增 project_scope
+  runtime:
+    applies: false
+    evidence: "仅调整既有异步数据库读取路径与授权判定顺序，不引入新并发、生命周期、重试或集成边界。"
+    required_checks: []
+  build:
+    applies: false
+    evidence: "不修改依赖、构建图、产物、发布/部署面或默认配置。"
+    required_checks: []
+  ui:
+    applies: false
+    evidence: "不修改管理端/CLI/Web UI 行为与接口。"
+    required_checks: []
+  harness:
+    applies: false
+    evidence: "本任务不修改 Harness 规则、检查器或测试基础设施。"
+    required_checks: []

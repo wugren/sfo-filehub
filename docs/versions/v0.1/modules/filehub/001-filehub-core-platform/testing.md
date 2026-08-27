@@ -26,11 +26,11 @@ Risk profile: ./risk-profile.yaml
 | Submodule | Responsibility | Detailed Test Doc | Required Behaviors | Edge/Failure Cases | Test Type | Test Files | Status | Gap / Manual Reason |
 |-----------|----------------|-------------------|--------------------|--------------------|-----------|------------|--------|---------------------|
 | account | sfo-account 装配/初始化 | tests/unit/account.rs | 初始账号、登录、会话解码、refresh、幂等 | 错误口令、垃圾凭据 | unit | tests/unit/account.rs | covered | not-applicable |
-| permissions | 统一权限判定 | tests/unit/permissions.rs | 账号角色、项目矩阵、协作者、token 二次限制 | 匿名/越权/owner 保护 | unit | tests/unit/permissions.rs | covered | not-applicable |
+| permissions | 统一权限判定 | tests/unit/permissions.rs | 任意账号可创建、项目矩阵、协作者、token 二次限制 | 匿名/越权/owner 保护 | unit | tests/unit/permissions.rs | covered | not-applicable |
 | tokens | token 生命周期与 JWT | tests/unit/tokens.rs | 创建/列表/改名/重签/轮换/撤销/过期校验 | 旧 JWT 失效、超过 1 年、他人 token | unit | tests/unit/tokens.rs | covered | not-applicable |
 | storage | .tar.gz 存储 | tests/unit/storage.rs | ingest/open/discard/gc、SHA、格式与上限 | 非 gzip、SHA 不一致、孤儿清理 | unit | tests/unit/storage.rs | covered | not-applicable |
 | versions | 版本/发布协调 | tests/unit/versions.rs | publish/list/latest/referenced、权限落库 | 409、只读拒绝 | unit | tests/unit/versions.rs | covered | not-applicable |
-| projects | 项目 CRUD/可见性 | tests/unit/projects.rs | create/list/visibility/delete | member 拒绝、重名、admin 无删除权 | unit | tests/unit/projects.rs | covered | not-applicable |
+| projects | 项目 CRUD/可见性 | tests/unit/projects.rs | create/list/visibility/delete | 任意账号可创建、重名、非 owner 无删除权 | unit | tests/unit/projects.rs | covered | not-applicable |
 | http/contract | 路由/DTO/错误映射 | tests/api_integration.rs | v1 HTTP 全链路 | 401/403/404/409/422 | integration | tests/api_integration.rs | covered | not-applicable |
 
 ## Module-Level Tests
@@ -145,7 +145,7 @@ Risk profile: ./risk-profile.yaml
 | PermissionChecker::can_access | Anonymous/User/Token 三分支与二次限制 | public 只读、private deny、owner 隐式 admin、token scope 交集 | tests/unit/permissions.rs | covered | not-applicable |
 | collaborator grant/update/remove | administration 前置校验 | 协作者列表、owner 不可授权/移除 | tests/unit/permissions.rs | covered | not-applicable |
 | TokenService::create/update/rotate/revoke/resolve | 重签/轮换/撤销/过期分支 | 仅 name 不重签、scope 变更旧 JWT 失效、超过 1 年拒绝 | tests/unit/tokens.rs | covered | not-applicable |
-| ProjectService::create/list/delete | member deny/冲突/可见性/删除权 | member 拒绝、重名冲突、delete 需账号级权限 | tests/unit/projects.rs | covered | not-applicable |
+| ProjectService::create/list/delete | 任意账号可创建/冲突/可见性/删除权 | 创建者成为 owner、重名冲突、delete 仅项目 owner | tests/unit/projects.rs | covered | not-applicable |
 | VersionService::publish/list/get | 版本唯一/latest/只读协作者 | 409 重复、latest 倒序、read 角色不可发布 | tests/unit/versions.rs | covered | not-applicable |
 
 ## DV Tests
@@ -161,7 +161,7 @@ Risk profile: ./risk-profile.yaml
 | Contract or Flow | Modules Involved | Success Case | Failure Case | Test File | Status | Gap / Manual Reason |
 |------------------|------------------|--------------|--------------|-----------|--------|---------------------|
 | 登录/会话/refresh HTTP | account + sfo-http | POST /account/login、GET /account/get_account_info | Bearer session 获取当前账号 | tests/api_integration.rs | covered | not-applicable |
-| 项目可见性边界 | http + projects + permissions | owner 创建 private、匿名 401、member 403、切 public 后匿名 200 | 错误状态码断言 | tests/api_integration.rs | covered | not-applicable |
+| 项目可见性边界 | http + projects + permissions | 任意账号创建 private、匿名 401、切 public 后匿名 200 | 错误状态码断言 | tests/api_integration.rs | covered | not-applicable |
 | 版本发布/列表/下载 | http + versions + storage + files | multipart 发布 201、重复 409、latest、下载字节与 SHA 一致 | 409 与下载 SHA 失败断言 | tests/api_integration.rs | covered | not-applicable |
 | token 生命周期与二次限制 | http + tokens + permissions | 创建 201、read token 可读、写权限 403、rotate 旧 token 401 | 旧 token 401、写 403 | tests/api_integration.rs | covered | not-applicable |
 | 协作者授权 | http + permissions | grant read 后 bob 可读、bob 写 403 | 未授权/低权限拒绝 | tests/api_integration.rs | covered | not-applicable |

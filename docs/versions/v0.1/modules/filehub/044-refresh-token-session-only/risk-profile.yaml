@@ -1,0 +1,46 @@
+schema_version: 1
+task_manifest: task.yaml
+
+# `risk-profile-check.py --prepare` 会刷新下列 task/change 与源码绑定；
+# 提案/设计变更后必须重新 prepare 并复核七类判定。
+change_ids: ["fh-refresh-decoder-reject", "fh-refresh-regression"]
+source_bindings:
+  proposal: proposal.md
+  design_source: design.md
+
+risks:
+  contract:
+    applies: false
+    evidence: "登录/refresh 的 HTTP 请求响应结构、session/refresh JWT 格式与有效期、CLI/admin-web 的续期调用方式均不改变；不新增公开路由与请求字段，也不改动 token 凭据的验签路径。"
+    required_checks: []
+  data:
+    applies: false
+    evidence: "不新增/修改表结构、迁移或持久化状态；SQLite schema 与本任务无关。"
+    required_checks: []
+  security:
+    applies: true
+    evidence:
+      - third_party/sfo-account/src/account_manager.rs
+      - third_party/sfo-account/src/account_server.rs
+      - server/src/http/auth.rs
+      - server/src/account/authn.rs
+    required_checks:
+      - decode_session 必须拒绝 sub 等于 refresh_sub 的 token（SessionInvalid，fail closed），使 refresh token 不能映射为用户身份
+      - 正常 session（默认无 sub 或自定义 session_sub）仍可解码并映射 Principal::User；refresh_session 仍只接受 refresh token 且换发后的新 session 可用
+      - 所有 decode_session 消费方（server 认证桥、/account/get_account_info_of_session、/account/get_account_info）都不再把 refresh token 当访问凭据（API 反例断言）
+  runtime:
+    applies: false
+    evidence: "仅在同一解码函数内增加一次只读 claims 比较，不引入新并发、生命周期、重试、超时或集成边界。"
+    required_checks: []
+  build:
+    applies: false
+    evidence: "不修改依赖、Cargo patch、构建图、产物、发布/部署面或默认配置；third_party/sfo-account 的 patch 来源与版本不变。"
+    required_checks: []
+  ui:
+    applies: false
+    evidence: "不修改 admin-web 与 CLI 的 UI/交互；CLI 233 号续期 mock 行为（session 401 后用 refresh_session 重试一次）不变。"
+    required_checks: []
+  harness:
+    applies: false
+    evidence: "不修改 Harness 规则、检查器或测试基础设施；本任务只消费其文件。"
+    required_checks: []

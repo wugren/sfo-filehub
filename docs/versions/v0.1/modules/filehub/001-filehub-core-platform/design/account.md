@@ -45,8 +45,7 @@ pub struct AccountModule {
 }
 
 impl AccountModule {
-    // [users] 每项含用户名、密码或密码哈希；可选 role = "owner"|"member"（缺省 member）由 permissions::PermissionsModule::init 消费，
-    // account 只负责 users 表，不写 account_roles
+    // [users] 每项含用户名、密码或密码哈希；无账号级角色，account 只负责 users 表
     pub async fn init(config: &UsersConfig, db: &SqlitePool) -> Result<Self, AccountInitError>;
     // 直接导出 sfo-account 的 HTTP 接口（AccountServer::register_server 装配），filehub 不自写 handler：
     //   POST /account/login                      -> LoginResp { session, refresh_session }
@@ -85,6 +84,6 @@ pub struct CurrentUser { pub id: UserId, pub username: String }
 - 存储：账号数据经本模块实现的 `AccountStore` 落 SQLite `users` 表；sessions 无独立表，不存在服务端 session 生命周期状态需要维护。
 - 登录成功后返回 session + refresh_session，客户端后续请求带 `Authorization: Bearer <session-token>`，refresh 续期按 `sfo-account` 语义调用 `/account/refresh_session`；TTL/续期不新造模型。
 - 不实现账号领域 trait（如 `AccountService`、`SessionService`）：账号逻辑全部来自 `sfo-account`。
-- `UsersConfig` 的 `role` 字段属权限域配置：account 模块忽略该字段，`permissions` 模块在启动装配同一阶段读取并幂等初始化 `account_roles`；避免角色数据进入账号模块。
+- 无账号级角色（035 修订）：`UsersConfig` 不含 `role` 字段，不存在 `account_roles` 数据；permissions 模块只维护 `project_grants`。
 - 接口并发语义（第五次修订）：本模块无自建服务 trait；`init`（配置/SQLite 初始化）与 `decode_session` 为 async，`register_http`/`current_user` 保持同步。
 - 测试设计由 testing 阶段承接。

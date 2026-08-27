@@ -3,7 +3,7 @@
 use sfo_http::errors::HttpResult;
 use sfo_http::http_server::Response;
 
-use crate::contract::{set_download_headers, ApiError};
+use crate::contract::{ApiError, set_download_headers};
 use crate::model::FileId;
 
 use super::FileStore;
@@ -30,4 +30,3 @@ pub async fn download_response<Resp: Response>(
 pub fn api_error_to_http<Resp: Response>(err: &ApiError) -> HttpResult<Resp> {
     super::crate_error_to_http(err)
 }
-

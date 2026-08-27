@@ -1,0 +1,62 @@
+schema_version: 1
+# refresh token 只能用于 refresh：任务级测试计划（044-refresh-token-session-only）
+task_manifest: task.yaml
+risk_profile: risk-profile.yaml
+api_impact:
+  public_api: none
+  crate_root_export_change: false
+  build_surface_change: false
+  documentation_examples_affected: false
+evidence_inputs: ["third_party/sfo-account/src", "server/src", "server/tests", "docs/modules/filehub.md"]
+contract_checks:
+  mode: enabled
+  steps:
+    - id: contract-compile-closure
+      name: vendored sfo-account 源码改动在 workspace 消费者中可编译
+      kind: repository-compile-closure
+      assertion: repository-consumers-compile
+      change_ids: ["fh-refresh-decoder-reject", "fh-refresh-regression"]
+      run: ["cargo", "test", "--workspace", "--no-run", "--all-targets"]
+levels:
+  unit:
+    mode: enabled
+    summary: 单元：decode_session 拒绝 refresh 类型；普通 session 解码与 refresh 轮换不受影响
+    test_targets: [server/tests/unit/account.rs]
+    preconditions:
+      tools: ["cargo"]
+      env: []
+      services: []
+      notes: [shared worktree：只运行 server 单元套件，避免触碰其他在制任务改动]
+    steps:
+      - id: refresh-session-unit
+        name: run filehub-server unit tests (refresh 回归 + 既有断言)
+        change_ids: ["fh-refresh-decoder-reject", "fh-refresh-regression"]
+        run: ["cargo", "test", "--manifest-path", "server/Cargo.toml", "--test", "unit_tests"]
+  dv:
+    mode: enabled
+    summary: DV：登录/session/token 生命周期回归（本修复不引入新状态机）
+    test_targets: [server/tests/dv_tests.rs]
+    preconditions:
+      tools: ["cargo"]
+      env: []
+      services: []
+      notes: []
+    steps:
+      - id: refresh-session-dv
+        name: run filehub-server DV tests
+        change_ids: ["fh-refresh-decoder-reject", "fh-refresh-regression"]
+        run: ["cargo", "test", "--manifest-path", "server/Cargo.toml", "--test", "dv_tests"]
+  integration:
+    mode: enabled
+    summary: 集成：refresh token 不能访问用户接口；refresh 端点仍可换发且换发后的 session 可用
+    test_targets: [server/tests/api_integration.rs]
+    preconditions:
+      tools: ["cargo"]
+      env: []
+      services: []
+      notes: [串行 + --nocapture 与模块级 integration 输出保持一致]
+    steps:
+      - id: refresh-session-integration
+        name: run filehub-server API integration tests
+        change_ids: ["fh-refresh-decoder-reject", "fh-refresh-regression"]
+        run: ["cargo", "test", "--manifest-path", "server/Cargo.toml", "--test", "api_integration", "--", "--test-threads=1", "--nocapture"]

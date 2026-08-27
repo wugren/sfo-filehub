@@ -16,7 +16,13 @@ use model::{TokenCreateRequest, TokenPrincipal, TokenResult, TokenUpdateRequest}
 pub trait TokenService: 'static + Send + Sync {
     async fn create(&self, req: TokenCreateRequest) -> TokenResult<TokenIssued>;
     async fn list(&self, owner: &UserId) -> TokenResult<Vec<TokenSummary>>;
-    async fn update(&self, token_id: &TokenId, owner: &UserId, patch: TokenUpdateRequest) -> TokenResult<Option<TokenIssued>>;
+    /// 属性修改（name/project_scope/scopes）只落库、不重签，返回最新摘要。
+    async fn update(
+        &self,
+        token_id: &TokenId,
+        owner: &UserId,
+        patch: TokenUpdateRequest,
+    ) -> TokenResult<TokenSummary>;
     async fn rotate(&self, token_id: &TokenId, owner: &UserId) -> TokenResult<TokenIssued>;
     async fn revoke(&self, token_id: &TokenId, owner: &UserId) -> TokenResult<()>;
     async fn resolve(&self, bearer: &str) -> TokenResult<TokenPrincipal>;

@@ -137,7 +137,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   if (parts[0] === "api" && parts[1] === "v1") {
     if (method === "GET" && parts[2] === "projects" && parts.length === 3) {
-      sendJson(res, 200, state.projects);
+      const limitRaw = url.searchParams.get("limit");
+      const offsetRaw = url.searchParams.get("offset");
+      const offset = offsetRaw !== null ? Number(offsetRaw) : 0;
+      const end = limitRaw !== null ? offset + Number(limitRaw) : state.projects.length;
+      sendJson(res, 200, state.projects.slice(offset, end), {
+        "x-total-count": String(state.projects.length),
+      });
       return;
     }
     if (method === "POST" && parts[2] === "projects" && parts.length === 3) {
@@ -153,6 +159,16 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
     const projectMatch = parts[2] === "projects" && /^\d+$/.test(parts[3] ?? "");
+    if (projectMatch && parts.length === 4 && method === "GET") {
+      const id = Number(parts[3]);
+      const project = state.projects.find((item) => item.project_id === id);
+      if (!project) {
+        sendJson(res, 404, { error: "not_found", message: "project not found" });
+        return;
+      }
+      sendJson(res, 200, project);
+      return;
+    }
     if (projectMatch && parts.length === 4 && method === "DELETE") {
       const id = Number(parts[3]);
       state.projects = state.projects.filter((item) => item.project_id !== id);
@@ -286,18 +302,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       }
       if (method === "POST") {
         const body = (await readJson(req)) ?? {};
-        if (typeof body.scopes === "undefined" && typeof body.project_scope === "undefined") {
-          token.name = String(body.name ?? token.name);
-          sendJson(res, 200, {
-            token_id: id,
-            name: token.name,
-            project_scope: token.project_scope,
-            scopes: token.scopes,
-            created_at: token.created_at,
-            updated_at: token.updated_at,
-          });
-          return;
-        }
         if (Array.isArray(body.scopes)) {
           token.scopes = body.scopes as string[];
         }
@@ -307,7 +311,14 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         if (typeof body.name === "string") {
           token.name = body.name;
         }
-        sendJson(res, 200, { token_id: id, jwt: `jwt-resigned-${id}`, name: token.name, expires_at: null });
+        sendJson(res, 200, {
+          token_id: id,
+          name: token.name,
+          project_scope: token.project_scope,
+          scopes: token.scopes,
+          created_at: token.created_at,
+          updated_at: token.updated_at,
+        });
         return;
       }
     }
@@ -363,6 +374,33 @@ describe("v1 contract integration (契约桩)", () => {
     expect(after.some((item) => item.project_id === created.project_id)).toBe(false);
   });
 
+  it("pages project list with limit/offset and the X-Total-Count header", async () => {
+    for (let i = 0; i < 4; i++) {
+      await client.createProject(session, `tmp-${i}`, "private");
+    }
+    const first = await client.listProjectsPage(session, { limit: 2, offset: 0 });
+    expect(first.items.map((item) => item.name)).toEqual(["demo", "tmp-0"]);
+    expect(first.total).toBe(5);
+    const second = await client.listProjectsPage(session, { limit: 2, offset: 2 });
+    expect(second.items.map((item) => item.name)).toEqual(["tmp-1", "tmp-2"]);
+    expect(second.total).toBe(5);
+  });
+
+  it("gets a single project by id and collects all pages into the full list", async () => {
+    const created = await client.createProject(session, "page-target", "private");
+    const direct = await client.getProject(session, created.project_id);
+    expect(direct.name).toBe("page-target");
+
+    const all = await client.listAllProjects(session, 2);
+    expect(all.length).toBeGreaterThanOrEqual(5);
+    expect(all.some((item) => item.project_id === created.project_id)).toBe(true);
+
+    await expect(client.getProject(session, 9999)).rejects.toMatchObject({
+      kind: "not_found",
+      status: 404,
+    });
+  });
+
   it("uploads project_scope as server JSON and keeps token list free of expiry", async () => {
     const issued = await client.createToken(session, {
       name: "deploy",
@@ -378,11 +416,13 @@ describe("v1 contract integration (契约桩)", () => {
     expect(Object.keys(item ?? {})).not.toContain("expires_at");
   });
 
-  it("distinguishes name-only updates from resigns and supports rotate/revoke", async () => {
+  it("attribute updates return TokenSummary; only rotate (re-sign) returns TokenIssued", async () => {
     const summary = await client.updateToken(session, 1, { name: "renamed" });
     expect("jwt" in summary).toBe(false);
-    const resigned = await client.updateToken(session, 1, { scopes: ["artifacts:read"] });
-    expect("jwt" in resigned).toBe(true);
+    expect(summary.name).toBe("renamed");
+    const updated = await client.updateToken(session, 1, { scopes: ["artifacts:read"] });
+    expect("jwt" in updated).toBe(false);
+    expect(updated.scopes).toEqual(["artifacts:read"]);
     const rotated = await client.rotateToken(session, 1);
     expect(rotated.jwt).toContain("rotated");
     await client.revokeToken(session, 1);

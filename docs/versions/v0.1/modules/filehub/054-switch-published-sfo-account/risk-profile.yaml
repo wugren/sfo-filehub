@@ -1,0 +1,70 @@
+schema_version: 1
+task_manifest: task.yaml
+
+# `risk-profile-check.py --prepare` 会刷新下列 task/change 与源码绑定；
+# 提案/设计变更后必须重新 prepare 并复核七类判定。
+change_ids: ["fh-sfo-account-published-source", "fh-sfo-account-conformance", "fh-sfo-account-regression"]
+source_bindings:
+  proposal: proposal.md
+  design_source: design.md
+
+risks:
+  contract:
+    applies: true
+    evidence:
+      - server/tests/api_integration.rs
+      - server/tests/unit/account.rs
+      - docs/api/v1-contract.md
+      - Cargo.lock
+    required_checks:
+      - /account/login 未知账号返回 err=9 且消息含用户名的英文文案
+      - /account/login 密码错误返回 err=10 且消息为 "Invalid username or password"
+      - /account/login 超限返回 err=11 且消息为 "Too many login attempts; please try again later"
+      - 登录成功响应结构（{err:0,result:{session,refresh_session}}）与刷新/会话信息路由不回退
+  data:
+    applies: false
+    evidence: "不新增/修改表结构、迁移或持久化状态；SQLite schema、session/JWT 凭据格式与有效期不变。"
+    required_checks: []
+  security:
+    applies: true
+    evidence:
+      - server/src/account/mod.rs
+      - server/src/model/config.rs
+      - server/tests/unit/account.rs
+      - server/tests/api_integration.rs
+    required_checks:
+      - refresh token 走用户接口/账户信息接口仍被拒绝（与 registry 0.2.1 一致，fail closed）
+      - 短 session_key 启动给出明确错误且错误信息不包含密钥明文
+      - 启动/运行日志不打印 session_key
+  runtime:
+    applies: true
+    evidence:
+      - server/src/model/config.rs
+      - server/src/main.rs
+      - server/src/account/mod.rs
+      - server/tests/common/mod.rs
+      - cli/tests/e2e_cli_server.rs
+    required_checks:
+      - 32 字节及以上 session_key 正常启动并完成登录/会话流程
+      - 29-31 字节 session_key 通过 UsersConfig::validate 与 AccountModule::init 均明确失败（不 panic）
+      - 测试/e2e fixture 密钥均不少于 32 字节
+  build:
+    applies: true
+    evidence:
+      - Cargo.toml
+      - Cargo.lock
+      - third_party/sfo-account
+      - server/Cargo.toml
+      - cli/Cargo.toml
+    required_checks:
+      - Cargo.lock 中 sfo-account 解析为 version 0.2.1 且 source 为 crates.io registry，无 path 条目
+      - third_party/sfo-account/ 目录已删除
+      - workspace 全目标编译（cargo test --workspace --no-run --all-targets）通过
+  ui:
+    applies: false
+    evidence: "不修改 admin-web/CLI 的 UI 与交互；仅后端错误消息与测试/契约文档变化。"
+    required_checks: []
+  harness:
+    applies: false
+    evidence: "不修改 Harness 规则、检查器或测试基础设施；本任务只消费其文件。"
+    required_checks: []
