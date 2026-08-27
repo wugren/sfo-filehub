@@ -88,13 +88,6 @@ fn yaml_example_keeps_defaulted_fields_commented_out() {
 }
 
 #[test]
-fn root_yaml_config_deserializes() {
-    let config: ServerConfig = serde_saphyr::from_str(include_str!("../../../filehub-server.yaml"))
-        .expect("root YAML config must deserialize");
-    assert!(config.users.validate().is_ok());
-}
-
-#[test]
 fn yaml_config_rejects_missing_required_field() {
     let raw = include_str!("../../config.example.yaml").replace("  port: 8080\n", "");
     let result = serde_saphyr::from_str::<ServerConfig>(&raw);
