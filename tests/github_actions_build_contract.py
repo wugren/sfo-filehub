@@ -155,6 +155,44 @@ class DvContractTests(unittest.TestCase):
             "${{ needs.authorize-publication.outputs.release_tag }}",
         )
 
+    def test_image_publish_pushes_version_and_latest_from_same_image(self) -> None:
+        publish = step("build-image", "Publish image to GHCR")["run"]
+        push_scripts = [
+            item["run"]
+            for job_name in WORKFLOW["jobs"]
+            for item in steps(job_name)
+            if "docker push" in item.get("run", "")
+        ]
+        self.assertEqual(push_scripts, [publish])
+        required = (
+            'version_image="ghcr.io/${owner}/filehub:v${VERSION}"',
+            'latest_image="ghcr.io/${owner}/filehub:latest"',
+            'docker tag "$version_image" "$latest_image"',
+            'docker push "$version_image"',
+            'docker push "$latest_image"',
+            'test "$latest_digest" = "$version_digest"',
+        )
+        for token in required:
+            self.assertIn(token, publish)
+        self.assertLess(
+            publish.index('docker tag "$version_image" "$latest_image"'),
+            publish.index('docker push "$latest_image"'),
+        )
+
+    def test_image_smoke_uses_read_only_yaml_and_rejects_missing_config(self) -> None:
+        smoke = step("build-image", "Smoke test container startup")["run"]
+        required = (
+            'config="${GITHUB_WORKSPACE}/docker/filehub-server.example.yaml"',
+            "dst=/etc/filehub/filehub-server.yaml,readonly",
+            'config_hash_before="$(sha256sum "$config"',
+            'test "$config_hash_after" = "$config_hash_before"',
+            'if docker run --rm "$image"; then',
+            "container without mounted config unexpectedly started",
+        )
+        for token in required:
+            self.assertIn(token, smoke)
+        self.assertNotIn("-e FH_", smoke)
+
 
 class IntegrationContractTests(unittest.TestCase):
     def test_all_run_scripts_have_valid_bash_syntax(self) -> None:

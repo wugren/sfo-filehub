@@ -31,47 +31,42 @@ IMAGE_TAG=filehub:0.1.0 ./build-docker.sh
 
 生成的镜像内包含：
 
-- `filehub-server` release 二进制（容器内监听 `127.0.0.1:${FH_SERVER_PORT}`，默认 8080）；
+- `filehub-server` release 二进制（容器内固定监听 `127.0.0.1:8080`）；
 - admin-web 构建产物（`VITE_API_BASE_URL=/`，与 API 同源）；
-- nginx 站点配置：`/account/`、`/api/v1/` 反代到 server，其余路径服务管理页。
+- nginx 站点配置：`/account/`、`/api/v1/` 固定反代到 `127.0.0.1:8080`，其余路径服务管理页。
 
-入口脚本在 `/etc/filehub/filehub-server.yaml` 生成服务端 YAML 配置（可通过既有
-`FH_CONFIG` 覆盖路径），再用该文件启动 `filehub-server`。
+镜像不通过环境变量生成配置。启动前必须把完整 YAML 以只读方式挂载到固定位置
+`/etc/filehub/filehub-server.yaml`；配置缺失、不可读或导致 server 启动失败时，
+容器会失败退出。
 
 ## 运行
 
-数据目录在容器内固定为 `/data`（SQLite 为 `/data/filehub.db`，文件归档为
-`/data/files`），外部持久化位置请用 `-v` 卷挂载指定，不使用数据目录环境变量：
+先复制 Docker 专用示例，替换管理员密码和示例 Ed25519 私钥，并限制文件权限：
 
 ```bash
-mkdir -p ~/filehub-data
+cp docker/filehub-server.example.yaml ./filehub-server.yaml
+openssl genpkey -algorithm Ed25519
+# 把命令输出的完整 PEM 安全写入 users.session_private_key，再修改账号密码。
+chmod 600 ./filehub-server.yaml
+mkdir -p ./filehub-data
+
 docker run -d --name filehub \
+  --restart unless-stopped \
   -p 8080:80 \
-  -v ~/filehub-data:/data \
-  -e FH_ADMIN_PASSWORD="请换成强密码" \
+  --mount type=bind,src="$(pwd)/filehub-server.yaml",dst=/etc/filehub/filehub-server.yaml,readonly \
+  --mount type=bind,src="$(pwd)/filehub-data",dst=/data \
   filehub:dev
 ```
 
-浏览器访问 `http://127.0.0.1:8080`，使用 `admin` 与所设密码登录。
-重建容器时挂载同一个 `-v` 路径，数据库与文件归档都会保留。
+浏览器访问 `http://127.0.0.1:8080`，使用 YAML 中配置的账号登录。数据目录在
+容器内固定为 `/data`：SQLite 为 `/data/filehub.db`，文件归档为 `/data/files`。
+重建容器时继续挂载同一个数据目录，数据库与归档会保留。
 
-不显式设置 `FH_SESSION_PRIVATE_KEY` 时，入口脚本会在
-`/data/.session_private_key.pem` 生成并以 `0600` 持久化 Ed25519 PKCS#8 PEM
-私钥，重启后仍可验证已有 session/refresh JWT。也可由 secret manager 通过
-`FH_SESSION_PRIVATE_KEY` 注入完整 PEM。私钥属于敏感数据，请随数据卷安全备份，
-不得写入日志或镜像。
-
-## 环境变量
-
-| 环境变量 | 默认值 | 说明 |
-|----------|--------|------|
-| `FH_SERVER_PORT` | `8080` | 容器内 server 监听端口，nginx 反代目标 |
-| `FH_SESSION_PRIVATE_KEY` | 自动生成并持久化到 `/data/.session_private_key.pem` | Ed25519 PKCS#8 PEM 会话签名私钥；公钥自动派生 |
-| `FH_ADMIN_USERNAME` | `admin` | 初始 owner 账号 |
-| `FH_ADMIN_PASSWORD` | `change-me` | 初始密码；启动时会告警，生产必须显式设置 |
-| `FH_MAX_ARCHIVE_BYTES` | `104857600` | 单个归档上传上限（nginx 不设上限，由 server 约束） |
-| `FH_LOGIN_RATE_LIMIT_PER_MINUTE` | `30` | 每个来源 IP 每分钟最多登录尝试（0 关闭应用层限流） |
-| `FH_LOGIN_RATE_LIMIT_WINDOW_SECS` | `60` | 应用层登录限流统计窗口（秒） |
+Docker 镜像不支持环境变量覆盖 YAML 字段。完整配置项以
+[`filehub-server.example.yaml`](filehub-server.example.yaml) 和
+[`server/config.example.yaml`](../server/config.example.yaml) 为准。容器内部
+`server.server_addr` 必须是 `127.0.0.1`、`server.port` 必须是 `8080`；需要改变
+外部端口时修改 `-p` 左侧，例如 `-p 9000:80`。
 
 ## docker compose 示例
 
@@ -83,10 +78,10 @@ services:
       - "8080:80"
     volumes:
       - filehub-data:/data
-    environment:
-      # 可选：由 secret manager 注入完整 Ed25519 PKCS#8 PEM；省略则在 /data 自动生成。
-      FH_SESSION_PRIVATE_KEY: ${FH_SESSION_PRIVATE_KEY}
-      FH_ADMIN_PASSWORD: ${FH_ADMIN_PASSWORD}
+      - type: bind
+        source: ./filehub-server.yaml
+        target: /etc/filehub/filehub-server.yaml
+        read_only: true
 
 volumes:
   filehub-data:
@@ -94,13 +89,17 @@ volumes:
 
 ## 运维提示
 
-- 首次启动前把 `/data` 卷备份视为数据库与归档备份；推荐同时备份
-  `/data/.session_private_key.pem`。丢失或替换私钥会使已有 session/refresh JWT
-  全部失效，用户需要重新登录。
+- YAML 含管理员密码或密码哈希及会话签名私钥，应使用 secret 管理流程、宿主机
+  `0600` 权限和只读挂载；不要提交到源码仓库或输出到日志。
+- 从旧环境变量版镜像升级时，若要保留已有 session/refresh JWT，先从旧数据卷读取
+  `/data/.session_private_key.pem`，把同一 PEM 安全写入新 YAML；换新或丢失私钥会
+  要求所有用户重新登录。回滚时可恢复旧镜像及其原环境变量启动参数，`/data`
+  布局不变。
+- 备份 `/data` 数据卷以及独立保存的 YAML/secret；两者缺一都不是完整恢复材料。
 - 容器默认以 root 启动以便读写挂载卷；以 `--user` 运行时，请确保挂载目录对
   指定 UID/GID 可写。
 - 健康检查固定访问 `http://127.0.0.1/healthz`。
 - 登录限流已在镜像内实现：nginx `limit_req`（5r/s、burst 20、超限 429）对
   `location = /account/login` 生效，filehub-server 应用层再按来源 IP 固定窗口
-  限流（默认 30 次/分钟，可通过 `FH_LOGIN_RATE_LIMIT_*` 调整）。对外 HTTPS、
+  限流（示例为 30 次/分钟，可在 YAML 中调整）。对外 HTTPS、
   防火墙与其它边缘限流策略仍建议在前置反向代理/网关上配置。

@@ -3,12 +3,11 @@
 # 构建后复制进构建上下文（server/filehub-server 与 web/）。
 FROM nginx:1.27-alpine
 
-RUN apk add --no-cache jq openssl \
- && rm -f /etc/nginx/conf.d/default.conf \
+RUN rm -f /etc/nginx/conf.d/default.conf \
  && mkdir -p /etc/filehub /data /data/files \
  && chmod 700 /data
 
-COPY nginx.conf /etc/nginx/filehub.conf.tpl
+COPY nginx.conf /etc/nginx/conf.d/filehub.conf
 COPY entrypoint.sh /usr/local/bin/filehub-entrypoint
 COPY server/filehub-server /usr/local/bin/filehub-server
 COPY web/ /usr/share/nginx/html/

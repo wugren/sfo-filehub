@@ -19,18 +19,24 @@ filehub 用于把构建产物以 `.tar.gz` 归档发布到项目版本中：Web 
 
 ```bash
 docker pull ghcr.io/wugren/filehub:v0.1.0
+curl -fsSLo filehub-server.yaml \
+  https://raw.githubusercontent.com/wugren/sfo-filehub/main/docker/filehub-server.example.yaml
+# 替换 YAML 中的示例 Ed25519 私钥与管理员密码后：
+chmod 600 ./filehub-server.yaml
+mkdir -p ./filehub-data
 docker run -d --name filehub \
   -p 8080:80 \
-  -v ~/filehub-data:/data \
+  --mount type=bind,src="$(pwd)/filehub-server.yaml",dst=/etc/filehub/filehub-server.yaml,readonly \
+  --mount type=bind,src="$(pwd)/filehub-data",dst=/data \
   ghcr.io/wugren/filehub:v0.1.0
 ```
 
 容器内同时运行服务端与 nginx（管理页面 + `/account/`、`/api/v1/` 反代），
 浏览器打开 `http://127.0.0.1:8080`，用 `admin` 登录。数据目录固定在容器内
-`/data`（数据库与文件归档由卷挂载持久化）。服务端配置以配置文件为准：源码或
-归档部署时通过 `filehub-server.yaml` 控制（见下节与「开发者/本地构建」），
-容器内配置的运维细节见 [docker/README.md](docker/README.md)；首次启动使用内置
-默认账号 `admin/change-me` 并输出告警，对外暴露前必须覆盖默认密码。
+`/data`（数据库与文件归档由卷挂载持久化）。镜像只读取挂载到
+`/etc/filehub/filehub-server.yaml` 的完整 YAML，不通过环境变量生成或覆盖配置；
+容器内 server 地址/端口固定要求为 `127.0.0.1:8080`。配置与升级细节见
+[docker/README.md](docker/README.md)。
 
 ### 方式二：GitHub Release 归档
 
@@ -132,11 +138,12 @@ cd admin-web && npm run test:unit && npm run test:integration
 - **会话签名私钥**：账号 session/refresh JWT 使用 EdDSA（Ed25519）签名；
   `users.session_private_key` 必须是 Ed25519 PKCS#8 PEM，公钥由服务端自动派生。
   示例私钥只能用于本地演示，生产必须用
-  `openssl genpkey -algorithm Ed25519` 重新生成；容器会在持久卷中自动生成，
-  运维细节见 [docker/README.md](docker/README.md)；
+  `openssl genpkey -algorithm Ed25519` 重新生成并安全写入挂载的 YAML；镜像不会
+  自动生成私钥，运维细节见 [docker/README.md](docker/README.md)；
 - **升级影响**：从旧 HMAC `users.session_key` 切换后，已签发的 session/refresh
   JWT 无法继续验签，用户需要重新登录；不提供双算法兼容窗口；
-- **初始账号**：默认 `admin/change-me` 只是占位，首次部署必须改密码；
+- **初始账号**：Docker 示例中的管理员密码只是占位，首次部署必须改密码或使用
+  `password_hash`；
 - **上传校验**：上传先鉴权后收流，`sha256` 为必填字段，服务端流式复算校验并
   实时执行 `max_archive_bytes` 限长；服务端不解压/不校验归档内容，归档按
   `.tar.gz` 语义存储（CLI 打包/拉取时会校验 gzip 魔数与 SHA-256）；Docker 部署

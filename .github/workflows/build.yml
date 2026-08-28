@@ -368,8 +368,13 @@ jobs:
         run: |
           set -euo pipefail
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/filehub:v${VERSION}"
+          config="${GITHUB_WORKSPACE}/docker/filehub-server.example.yaml"
+          test -s "$config"
+          config_hash_before="$(sha256sum "$config" | cut -d ' ' -f 1)"
           cid="filehub-smoke-$$"
-          docker run -d --rm --name "$cid" -e FH_ADMIN_PASSWORD=ci-smoke "$image"
+          docker run -d --rm --name "$cid" \
+            --mount "type=bind,src=${config},dst=/etc/filehub/filehub-server.yaml,readonly" \
+            "$image"
           cleanup() { docker rm -f "$cid" >/dev/null 2>&1 || true; }
           trap cleanup EXIT
           ok=0
@@ -384,6 +389,12 @@ jobs:
           if [ "$ok" -ne 1 ]; then
             echo "container smoke test failed: filehub-server not running or /healthz unreachable" >&2
             docker logs --tail 50 "$cid" >&2 || true
+            exit 1
+          fi
+          config_hash_after="$(sha256sum "$config" | cut -d ' ' -f 1)"
+          test "$config_hash_after" = "$config_hash_before"
+          if docker run --rm "$image"; then
+            echo "container without mounted config unexpectedly started" >&2
             exit 1
           fi
           echo "container smoke test passed (filehub-server running, /healthz ok)"
@@ -405,11 +416,16 @@ jobs:
             exit 1
           fi
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          image="ghcr.io/${owner}/filehub:v${VERSION}"
+          version_image="ghcr.io/${owner}/filehub:v${VERSION}"
+          latest_image="ghcr.io/${owner}/filehub:latest"
+          docker tag "$version_image" "$latest_image"
           echo "$GH_TOKEN" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
-          docker push "$image"
-          digest="$(docker buildx imagetools inspect "$image" --format '{{.Manifest.Digest}}')"
-          test -n "$digest"
+          docker push "$version_image"
+          docker push "$latest_image"
+          version_digest="$(docker buildx imagetools inspect "$version_image" --format '{{.Manifest.Digest}}')"
+          latest_digest="$(docker buildx imagetools inspect "$latest_image" --format '{{.Manifest.Digest}}')"
+          test -n "$version_digest"
+          test "$latest_digest" = "$version_digest"
 
   release:
     name: Publish GitHub Release
