@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / "build.yml"
 WORKFLOW_TEXT = WORKFLOW_PATH.read_text(encoding="utf-8")
 WORKFLOW = yaml.load(WORKFLOW_TEXT, Loader=yaml.BaseLoader)
+ROOT_README = (ROOT / "README.md").read_text(encoding="utf-8")
 
 
 def job(name: str) -> dict:
@@ -226,20 +227,58 @@ class IntegrationContractTests(unittest.TestCase):
             self.assertIn("refs/tags/${RELEASE_TAG}^{commit}", script)
             self.assertIn('"${tag_sha}" != "${SOURCE_SHA}"', script)
 
-    def test_release_asset_contract_is_unchanged(self) -> None:
+    def test_release_publishes_only_cli_archives(self) -> None:
+        release_step_names = {item.get("name") for item in steps("release")}
+        self.assertNotIn("Download server binary", release_step_names)
+        self.assertNotIn("Download admin-web dist", release_step_names)
+        self.assertNotIn("Package server and admin-web release archive", release_step_names)
+        cli_download = step("release", "Download CLI archives")
+        self.assertEqual(cli_download["with"]["pattern"], "filehub-cli-*")
+
         verify = step("release", "Verify release assets")["run"]
         expected = (
-            "filehub-server_${VERSION}_linux_x86_64.tar.gz",
             "filehub-cli_${VERSION}_linux-x86_64.tar.gz",
             "filehub-cli_${VERSION}_macos-aarch64.tar.gz",
             "filehub-cli_${VERSION}_windows-x86_64.tar.gz",
         )
         for asset in expected:
             self.assertIn(asset, verify)
+        self.assertNotIn("filehub-server_${VERSION}", verify)
+
         publish = step("release", "Create or update GitHub Release")["run"]
-        self.assertIn("Expected exactly four release archives", publish)
+        self.assertIn("Expected exactly three release archives", publish)
+        self.assertNotIn("filehub-server_${VERSION}", publish)
+        self.assertIn("Docker image: ghcr.io/%s/filehub:v%s", publish)
+        for asset in (
+            "filehub-cli_%s_linux-x86_64.tar.gz",
+            "filehub-cli_%s_macos-aarch64.tar.gz",
+            "filehub-cli_%s_windows-x86_64.tar.gz",
+        ):
+            self.assertIn(asset, publish)
         self.assertIn("gh release create", publish)
         self.assertIn("gh release upload", publish)
+
+    def test_docker_image_still_consumes_server_and_web_artifacts(self) -> None:
+        server_download = step("build-image", "Download server binary")
+        web_download = step("build-image", "Download admin-web dist")
+        self.assertEqual(server_download["with"]["name"], "filehub-server")
+        self.assertEqual(server_download["with"]["path"], "ctx/server")
+        self.assertEqual(web_download["with"]["name"], "web-dist")
+        self.assertEqual(web_download["with"]["path"], "ctx/web")
+
+        assemble = step("build-image", "Assemble minimal image context")["run"]
+        self.assertIn("chmod +x ctx/server/filehub-server", assemble)
+        self.assertIn("test -f ctx/web/index.html", assemble)
+
+    def test_readme_matches_cli_only_release_contract(self) -> None:
+        self.assertNotIn("filehub-server_<版本>_linux_x86_64.tar.gz", ROOT_README)
+        self.assertIn("GitHub Release 只发布 CLI 文件", ROOT_README)
+        for artifact in (
+            "filehub-cli_<版本>_linux-x86_64.tar.gz",
+            "filehub-cli_<版本>_macos-aarch64.tar.gz",
+            "filehub-cli_<版本>_windows-x86_64.tar.gz",
+        ):
+            self.assertIn(artifact, ROOT_README)
 
     def test_job_dependency_graph_is_acyclic(self) -> None:
         graph = {name: needs(name) for name in WORKFLOW["jobs"]}

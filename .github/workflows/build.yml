@@ -456,36 +456,12 @@ jobs:
             exit 1
           fi
 
-      - name: Download server binary
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: filehub-server
-          path: dist/raw/server
-
-      - name: Download admin-web dist
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: web-dist
-          path: dist/raw/web
-
       - name: Download CLI archives
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: filehub-cli-*
           path: dist/raw/cli
           merge-multiple: true
-
-      - name: Package server and admin-web release archive
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
-        run: |
-          set -euo pipefail
-          mkdir -p dist/server dist/web
-          cp dist/raw/server/filehub-server dist/server/filehub-server
-          cp -R dist/raw/web/. dist/web/
-          chmod +x dist/server/filehub-server
-          tar -czf "dist/filehub-server_${VERSION}_linux_x86_64.tar.gz" -C dist server web
-          test -s "dist/filehub-server_${VERSION}_linux_x86_64.tar.gz"
 
       - name: Verify release assets
         env:
@@ -495,7 +471,6 @@ jobs:
           shopt -s nullglob
           cp dist/raw/cli/*.tar.gz dist/
           expected=(
-            "dist/filehub-server_${VERSION}_linux_x86_64.tar.gz"
             "dist/filehub-cli_${VERSION}_linux-x86_64.tar.gz"
             "dist/filehub-cli_${VERSION}_macos-aarch64.tar.gz"
             "dist/filehub-cli_${VERSION}_windows-x86_64.tar.gz"
@@ -515,8 +490,8 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           assets=(dist/*.tar.gz)
-          if [[ ${#assets[@]} -ne 4 ]]; then
-            echo "Expected exactly four release archives, found ${#assets[@]}." >&2
+          if [[ ${#assets[@]} -ne 3 ]]; then
+            echo "Expected exactly three release archives, found ${#assets[@]}." >&2
             exit 1
           fi
           if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
@@ -525,8 +500,8 @@ jobs:
               --clobber
           else
             owner="${GITHUB_REPOSITORY_OWNER,,}"
-            printf -v notes 'filehub %s\n\nDocker image: ghcr.io/%s/filehub:v%s\n\nRelease assets:\n- filehub-server_%s_linux-x86_64.tar.gz\n- filehub-cli_%s_linux-x86_64.tar.gz\n- filehub-cli_%s_macos-aarch64.tar.gz\n- filehub-cli_%s_windows-x86_64.tar.gz' \
-              "$VERSION" "$owner" "$VERSION" "$VERSION" "$VERSION" "$VERSION" "$VERSION"
+            printf -v notes 'filehub %s\n\nDocker image: ghcr.io/%s/filehub:v%s\n\nRelease assets:\n- filehub-cli_%s_linux-x86_64.tar.gz\n- filehub-cli_%s_macos-aarch64.tar.gz\n- filehub-cli_%s_windows-x86_64.tar.gz' \
+              "$VERSION" "$owner" "$VERSION" "$VERSION" "$VERSION" "$VERSION"
             gh release create "${RELEASE_TAG}" "${assets[@]}" \
               --repo "${GITHUB_REPOSITORY}" \
               --verify-tag \

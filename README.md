@@ -38,14 +38,13 @@ docker run -d --name filehub \
 容器内 server 地址/端口固定要求为 `127.0.0.1:8080`。配置与升级细节见
 [docker/README.md](docker/README.md)。
 
-### 方式二：GitHub Release 归档
+### 方式二：GitHub Release CLI 归档
 
 打开 [wugren/sfo-filehub 的 Releases 页面](https://github.com/wugren/sfo-filehub/releases)，
-选择对应版本的发布，下载适合你的平台 / 场景的归档：
+选择对应版本的发布，下载适合你的平台的 CLI 归档：
 
 | 归档 | 内容 |
 |------|------|
-| `filehub-server_<版本>_linux_x86_64.tar.gz` | Linux 服务端二进制 + admin-web 静态产物（手动部署） |
 | `filehub-cli_<版本>_linux-x86_64.tar.gz` | Linux CLI 二进制 `filehub` |
 | `filehub-cli_<版本>_macos-aarch64.tar.gz` | macOS（Apple Silicon）CLI 二进制 `filehub` |
 | `filehub-cli_<版本>_windows-x86_64.tar.gz` | Windows CLI 二进制 `filehub.exe` |
@@ -57,12 +56,7 @@ tar -xzf filehub-cli_0.1.0_linux-x86_64.tar.gz
 ./filehub --help
 ```
 
-服务端 + 管理后台归档的目录结构为 `server/filehub-server` 与 `web/`（admin-web
-静态产物）。运行服务端前需按 `server/config.example.yaml` 创建配置（至少替换
-`users.session_private_key` 示例私钥与账号密码），再用 nginx/静态服务器托管 `web/` 并将
-`/account/`、`/api/v1/` 反代到服务端；nginx 参考配置见
-[docker/nginx.conf](docker/nginx.conf)。如果不想自己组装 nginx，直接用方式一的
-镜像即可。
+GitHub Release 只发布 CLI 文件；服务端与管理后台只通过方式一的 Docker 镜像发布。
 
 ## 使用操作
 
