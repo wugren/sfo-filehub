@@ -31,14 +31,14 @@ fi
 
 if ! command -v musl-gcc >/dev/null 2>&1; then
     echo "build-docker: warning: musl-gcc (musl-tools) not found" >&2
-    echo "  build-docker: 当前依赖已验证无需 musl-gcc 也能链接；若 C 依赖编译或链接报错，" >&2
-    echo "  build-docker: Debian/Ubuntu 请先安装 musl-tools 后重试" >&2
+    echo "  build-docker: current dependencies link without musl-gcc; if a C dependency fails to compile or link," >&2
+    echo "  build-docker: install musl-tools on Debian/Ubuntu and retry" >&2
 fi
 
 echo "==> [1/4] build filehub-server (musl static release)"
 cargo build --release -p filehub-server --target "$MUSL_TARGET"
 
-echo "==> [2/4] build admin-web (VITE_API_BASE_URL=/，页面与 API 同源)"
+echo "==> [2/4] build admin-web (VITE_API_BASE_URL=/, same origin as the API)"
 (
     cd admin-web
     if [ -d node_modules ] && [ -x node_modules/.bin/vite ]; then

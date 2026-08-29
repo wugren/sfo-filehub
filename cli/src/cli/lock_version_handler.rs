@@ -29,7 +29,11 @@ pub async fn run(config: Option<&Path>, args: LockVersionArgs) -> Result<i32, Cl
 
     match record.locked_at {
         Some(_) => println!("version locked: {}:{}", project, record.version),
-        None => return Err(CliError::InvalidInput("服务端未返回锁定状态".to_string())),
+        None => {
+            return Err(CliError::InvalidInput(
+                "server response did not include a lock status".to_string(),
+            ));
+        }
     }
     Ok(0)
 }

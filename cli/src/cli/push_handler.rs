@@ -11,7 +11,7 @@ pub async fn run(config: Option<&Path>, args: PushArgs) -> Result<i32, CliError>
         parse_server_project_version_name(&args.target).map_err(CliError::InvalidInput)?;
     if !args.path.exists() {
         return Err(CliError::Local(format!(
-            "待发布路径不存在：{}",
+            "path to publish does not exist: {}",
             args.path.display()
         )));
     }

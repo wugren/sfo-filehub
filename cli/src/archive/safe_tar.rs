@@ -45,18 +45,20 @@ pub fn pack_directory(source: &Path, destination: &Path) -> Result<(), ArchiveEr
     let root_name = source
         .file_name()
         .ok_or_else(|| {
-            ArchiveError::Unsupported("目录根部没有可用的名字段，无法安全打包".to_string())
+            ArchiveError::Unsupported(
+                "directory root has no usable name and cannot be archived safely".to_string(),
+            )
         })?
         .to_string_lossy()
         .into_owned();
     let root_real = fs::canonicalize(source)
-        .map_err(|e| ArchiveError::LocalFs(format!("解析源目录失败：{e}")))?;
+        .map_err(|e| ArchiveError::LocalFs(format!("failed to resolve source directory: {e}")))?;
     let mut entries = Vec::new();
     walk_directory(source, Path::new(&root_name), &root_real, &mut entries)?;
     entries.sort_by(|a, b| display(a).cmp(&display(b)));
 
     let file = fs::File::create(destination)
-        .map_err(|e| ArchiveError::LocalFs(format!("创建临时归档失败：{e}")))?;
+        .map_err(|e| ArchiveError::LocalFs(format!("failed to create temporary archive: {e}")))?;
     let encoder = GzEncoder::new(file, Compression::default());
     let mut builder = tar::Builder::new(encoder);
     for entry in entries {
@@ -64,36 +66,38 @@ pub fn pack_directory(source: &Path, destination: &Path) -> Result<(), ArchiveEr
     }
     let encoder = builder
         .into_inner()
-        .map_err(|e| ArchiveError::LocalFs(format!("完成 tar 流失败：{e}")))?;
+        .map_err(|e| ArchiveError::LocalFs(format!("failed to finish tar stream: {e}")))?;
     encoder
         .finish()
-        .map_err(|e| ArchiveError::LocalFs(format!("完成 gzip 流失败：{e}")))?;
+        .map_err(|e| ArchiveError::LocalFs(format!("failed to finish gzip stream: {e}")))?;
     Ok(())
 }
 
 /// 单文件打包：归档只含一个文件条目（以文件名为条目名）。
 pub fn pack_single_file(source: &Path, destination: &Path) -> Result<(), ArchiveError> {
     let name = source.file_name().ok_or_else(|| {
-        ArchiveError::Unsupported("文件没有可用的名字段，无法安全打包".to_string())
+        ArchiveError::Unsupported(
+            "file has no usable name and cannot be archived safely".to_string(),
+        )
     })?;
     let rel = PathBuf::from(name.to_string_lossy().into_owned());
     if !is_safe_entry(&rel.to_string_lossy(), None) {
         return Err(ArchiveError::Unsupported(format!(
-            "文件名不安全：{}",
+            "unsafe filename: {}",
             rel.display()
         )));
     }
     let file = fs::File::create(destination)
-        .map_err(|e| ArchiveError::LocalFs(format!("创建临时归档失败：{e}")))?;
+        .map_err(|e| ArchiveError::LocalFs(format!("failed to create temporary archive: {e}")))?;
     let encoder = GzEncoder::new(file, Compression::default());
     let mut builder = tar::Builder::new(encoder);
     append_entry(&mut builder, &Entry::File(rel), source)?;
     let encoder = builder
         .into_inner()
-        .map_err(|e| ArchiveError::LocalFs(format!("完成 tar 流失败：{e}")))?;
+        .map_err(|e| ArchiveError::LocalFs(format!("failed to finish tar stream: {e}")))?;
     encoder
         .finish()
-        .map_err(|e| ArchiveError::LocalFs(format!("完成 gzip 流失败：{e}")))?;
+        .map_err(|e| ArchiveError::LocalFs(format!("failed to finish gzip stream: {e}")))?;
     Ok(())
 }
 
@@ -104,7 +108,9 @@ fn walk_directory(
     out: &mut Vec<Entry>,
 ) -> Result<(), ArchiveError> {
     let mut children: Vec<_> = fs::read_dir(root)
-        .map_err(|e| ArchiveError::LocalFs(format!("读取目录 {} 失败：{e}", root.display())))?
+        .map_err(|e| {
+            ArchiveError::LocalFs(format!("failed to read directory {}: {e}", root.display()))
+        })?
         .collect::<Result<Vec<_>, io::Error>>()?;
     children.sort_by_key(|entry| entry.file_name());
     for child in children {
@@ -113,34 +119,34 @@ fn walk_directory(
         let rel_text = rel.to_string_lossy().into_owned();
         let file_type = child
             .file_type()
-            .map_err(|e| ArchiveError::LocalFs(format!("读取条目类型失败：{e}")))?;
+            .map_err(|e| ArchiveError::LocalFs(format!("failed to read entry type: {e}")))?;
         if file_type.is_dir() {
             if !is_safe_entry(&format!("{rel_text}/"), None) {
                 return Err(ArchiveError::Unsupported(format!(
-                    "目录条目不安全：{rel_text}"
+                    "unsafe directory entry: {rel_text}"
                 )));
             }
             out.push(Entry::Dir(rel.clone()));
             walk_directory(&child_path, &rel, root_real, out)?;
         } else if file_type.is_symlink() {
             let target = fs::read_link(&child_path)
-                .map_err(|e| ArchiveError::LocalFs(format!("读取符号链接失败：{e}")))?;
+                .map_err(|e| ArchiveError::LocalFs(format!("failed to read symbolic link: {e}")))?;
             let real_target = fs::canonicalize(&child_path).map_err(|e| {
                 ArchiveError::Unsupported(format!(
-                    "越界/失效符号链接 {}：{e}",
+                    "out-of-tree or invalid symbolic link {}: {e}",
                     child_path.display()
                 ))
             })?;
             if !real_target.starts_with(root_real) {
                 return Err(ArchiveError::Unsupported(format!(
-                    "拒绝打包指向源目录树外的符号链接：{}",
+                    "refusing to archive symbolic link outside the source tree: {}",
                     child_path.display()
                 )));
             }
             let stored_target = stored_link_target(prefix, &target, root_real);
             if !is_safe_entry(&rel_text, Some(&stored_target)) {
                 return Err(ArchiveError::Unsupported(format!(
-                    "符号链接条目不安全：{rel_text}"
+                    "unsafe symbolic link entry: {rel_text}"
                 )));
             }
             out.push(Entry::Symlink {
@@ -150,13 +156,13 @@ fn walk_directory(
         } else if file_type.is_file() {
             if !is_safe_entry(&rel_text, None) {
                 return Err(ArchiveError::Unsupported(format!(
-                    "文件条目不安全：{rel_text}"
+                    "unsafe file entry: {rel_text}"
                 )));
             }
             out.push(Entry::File(rel));
         } else {
             return Err(ArchiveError::Unsupported(format!(
-                "不支持打包特殊文件条目：{}",
+                "unsupported special file entry: {}",
                 child_path.display()
             )));
         }
@@ -225,7 +231,7 @@ fn append_entry<W: Write>(
             let path_text = format!("{}/", rel.to_string_lossy());
             if !is_safe_entry(&path_text, None) {
                 return Err(ArchiveError::Unsupported(format!(
-                    "目录条目不安全：{path_text}"
+                    "unsafe directory entry: {path_text}"
                 )));
             }
             let mut header = tar::Header::new_gnu();
@@ -236,13 +242,15 @@ fn append_entry<W: Write>(
             header.set_cksum();
             builder
                 .append_data(&mut header, path_text.as_str(), io::empty())
-                .map_err(|e| ArchiveError::LocalFs(format!("写入目录条目失败：{e}")))?;
+                .map_err(|e| {
+                    ArchiveError::LocalFs(format!("failed to write directory entry: {e}"))
+                })?;
         }
         Entry::File(rel) => {
             let path_text = rel.to_string_lossy().into_owned();
             if !is_safe_entry(&path_text, None) {
                 return Err(ArchiveError::Unsupported(format!(
-                    "文件条目不安全：{path_text}"
+                    "unsafe file entry: {path_text}"
                 )));
             }
             let file_path = if source_root.is_dir() {
@@ -256,11 +264,11 @@ fn append_entry<W: Write>(
                 source_root.to_path_buf()
             };
             let mut file = fs::File::open(&file_path).map_err(|e| {
-                ArchiveError::LocalFs(format!("打开 {} 失败：{e}", file_path.display()))
+                ArchiveError::LocalFs(format!("failed to open {}: {e}", file_path.display()))
             })?;
             let size = file
                 .metadata()
-                .map_err(|e| ArchiveError::LocalFs(format!("读取元数据失败：{e}")))?
+                .map_err(|e| ArchiveError::LocalFs(format!("failed to read metadata: {e}")))?
                 .len();
             let mut header = tar::Header::new_gnu();
             header.set_entry_type(tar::EntryType::file());
@@ -270,13 +278,13 @@ fn append_entry<W: Write>(
             header.set_cksum();
             builder
                 .append_data(&mut header, path_text.as_str(), &mut file)
-                .map_err(|e| ArchiveError::LocalFs(format!("写入文件条目失败：{e}")))?;
+                .map_err(|e| ArchiveError::LocalFs(format!("failed to write file entry: {e}")))?;
         }
         Entry::Symlink { path, target } => {
             let path_text = path.to_string_lossy().into_owned();
             if !is_safe_entry(&path_text, Some(target)) {
                 return Err(ArchiveError::Unsupported(format!(
-                    "符号链接条目不安全：{path_text}"
+                    "unsafe symbolic link entry: {path_text}"
                 )));
             }
             let mut header = tar::Header::new_gnu();
@@ -286,11 +294,13 @@ fn append_entry<W: Write>(
             header.set_size(0);
             header
                 .set_link_name(target.as_str())
-                .map_err(|e| ArchiveError::LocalFs(format!("设置链接目标失败：{e}")))?;
+                .map_err(|e| ArchiveError::LocalFs(format!("failed to set link target: {e}")))?;
             header.set_cksum();
             builder
                 .append_data(&mut header, path_text.as_str(), io::empty())
-                .map_err(|e| ArchiveError::LocalFs(format!("写入符号链接条目失败：{e}")))?;
+                .map_err(|e| {
+                    ArchiveError::LocalFs(format!("failed to write symbolic link entry: {e}"))
+                })?;
         }
     }
     Ok(())

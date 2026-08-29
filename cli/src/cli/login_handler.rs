@@ -34,19 +34,19 @@ pub async fn run_login(config: Option<&Path>, args: LoginArgs) -> Result<i32, Cl
             let login = client.login_password(&username, &secret).await?;
             store.save_session(&server, &username, &login.session, &login.refresh_session)?;
             store.flush()?;
-            log::info!("账号密码登录成功，凭据已保存（不含明文日志）");
-            println!("Login Succeeded（{server}，用户 {username}）");
+            log::info!("password sign-in succeeded; credentials saved without logging secrets");
+            println!("Login Succeeded ({server}, user {username})");
         }
         LoginMode::Token => {
             // 登录时用受保护只读接口验证 token 有效性；无效不发版、不写凭据。
             client
                 .list_projects(&secret)
                 .await
-                .map_err(|e| CliError::Auth(format!("token 校验失败：{e}")))?;
+                .map_err(|e| CliError::Auth(format!("token validation failed: {e}")))?;
             store.save_token(&server, &secret)?;
             store.flush()?;
-            log::info!("token 登录成功，凭据已保存（不含明文日志）");
-            println!("Login Succeeded（{server}，token 已保存）");
+            log::info!("token sign-in succeeded; credentials saved without logging secrets");
+            println!("Login Succeeded ({server}, token saved)");
         }
     }
     Ok(0)
@@ -57,7 +57,7 @@ pub async fn run_logout(config: Option<&Path>, args: LogoutArgs) -> Result<i32, 
     let env_server = std::env::var("FILEHUB_SERVER").ok();
     let server = store.logout(args.server.as_deref(), env_server.as_deref())?;
     store.flush()?;
-    println!("Logout Succeeded（{server}）");
+    println!("Logout Succeeded ({server})");
     Ok(0)
 }
 
@@ -83,7 +83,7 @@ fn collect_login_inputs<'a>(
     let token_mode = args.token_stdin;
     if password_mode && token_mode {
         return Err(CliError::Usage(
-            "--password-stdin/--username/密码环境变量与 --token-stdin/token 登录互斥".to_string(),
+            "--password-stdin, --username, and password environment variables conflict with --token-stdin token sign-in".to_string(),
         ));
     }
 
@@ -95,7 +95,8 @@ fn collect_login_inputs<'a>(
         LoginMode::Token
     } else if !stdin_is_terminal {
         return Err(CliError::Usage(
-            "stdin 非终端时必须显式使用 --password-stdin 或 --token-stdin".to_string(),
+            "when stdin is not a terminal, explicitly use --password-stdin or --token-stdin"
+                .to_string(),
         ));
     } else {
         // 交互终端且未指定登录方式：提示用户先选择账号密码或 token。
@@ -129,11 +130,11 @@ fn collect_login_inputs<'a>(
 /// 交互模式未指定登录方式时，用 ↑/↓ 高亮选择并回车确认。
 fn prompt_login_mode() -> Result<LoginMode, CliError> {
     let selection = dialoguer::Select::new()
-        .with_prompt("请选择登录方式")
-        .items(["账号密码", "Token"])
+        .with_prompt("Select a sign-in method")
+        .items(["Username and password", "Token"])
         .default(0)
         .interact()
-        .map_err(|e| CliError::Local(format!("读取登录方式选择失败：{e}")))?;
+        .map_err(|e| CliError::Local(format!("failed to read sign-in method selection: {e}")))?;
     login_mode_from_select_index(selection)
 }
 
@@ -143,7 +144,8 @@ fn login_mode_from_select_index(index: usize) -> Result<LoginMode, CliError> {
         0 => Ok(LoginMode::Password),
         1 => Ok(LoginMode::Token),
         _ => Err(CliError::Usage(
-            "登录方式选择无效：请用上下键选择账号密码或 Token".to_string(),
+            "invalid sign-in method selection; use the arrow keys to select Username and password or Token"
+                .to_string(),
         )),
     }
 }
@@ -157,13 +159,14 @@ fn password_inputs(
 ) -> Result<(LoginMode, String, String), CliError> {
     let username = match args.username.as_deref() {
         Some(name) if !name.trim().is_empty() => name.trim().to_string(),
-        Some(_) => return Err(CliError::Usage("用户名不能为空".to_string())),
+        Some(_) => return Err(CliError::Usage("username cannot be empty".to_string())),
         None => env_username.unwrap_or_default(),
     };
     let username = if username.is_empty() {
         if !stdin_is_terminal {
             return Err(CliError::Usage(
-                "stdin 非终端时用户名必须经 -u/--username 或 FILEHUB_USERNAME 提供".to_string(),
+                "when stdin is not a terminal, provide the username with -u/--username or FILEHUB_USERNAME"
+                    .to_string(),
             ));
         }
         print!("Username: ");
@@ -173,10 +176,10 @@ fn password_inputs(
         let mut line = String::new();
         std::io::stdin()
             .read_line(&mut line)
-            .map_err(|e| CliError::Local(format!("读取用户名失败：{e}")))?;
+            .map_err(|e| CliError::Local(format!("failed to read username: {e}")))?;
         let trimmed = line.trim().to_string();
         if trimmed.is_empty() {
-            return Err(CliError::Usage("用户名不能为空".to_string()));
+            return Err(CliError::Usage("username cannot be empty".to_string()));
         }
         trimmed
     } else {
@@ -203,11 +206,11 @@ fn password_inputs(
         read_hidden()
     } else {
         return Err(CliError::Usage(
-            "stdin 非终端且未给 --password-stdin 时无法输入密码".to_string(),
+            "cannot read a password from non-terminal stdin without --password-stdin".to_string(),
         ));
     };
     if password.is_empty() {
-        return Err(CliError::Auth("密码不能为空".to_string()));
+        return Err(CliError::Auth("password cannot be empty".to_string()));
     }
     Ok((LoginMode::Password, username, password))
 }

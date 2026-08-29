@@ -49,11 +49,14 @@ impl From<io::Error> for ArchiveError {
 /// 把单个文件或目录打包为安全 `.tar.gz`，返回临时归档 + SHA-256 + 大小。
 pub fn pack_tar_gz(source: &Path) -> Result<PackedArchive, ArchiveError> {
     let metadata = fs::metadata(source).map_err(|e| {
-        ArchiveError::LocalFs(format!("读取待发布路径 {} 失败：{e}", source.display()))
+        ArchiveError::LocalFs(format!(
+            "failed to read path to publish {}: {e}",
+            source.display()
+        ))
     })?;
     if !metadata.is_dir() && !metadata.is_file() {
         return Err(ArchiveError::Unsupported(format!(
-            "{} 不是普通文件或目录，无法发布",
+            "{} is not a regular file or directory and cannot be published",
             source.display()
         )));
     }
@@ -99,7 +102,8 @@ pub fn sanitize_artifact_name(project: &str, version: &str) -> Result<String, Ar
     }
     if name.len() > 255 || name.is_empty() {
         return Err(ArchiveError::Unsupported(
-            "生成下载文件名失败：项目/版本净化后仍超长".to_string(),
+            "failed to generate download filename because the sanitized project/version is still too long"
+                .to_string(),
         ));
     }
     Ok(name)
@@ -110,7 +114,7 @@ pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), ArchiveError> {
     let (actual, _size) = hash_file(path)?;
     if !actual.eq_ignore_ascii_case(expected.trim()) {
         return Err(ArchiveError::Integrity(format!(
-            "内容校验失败：期望 sha256={}，实际 sha256={}",
+            "content verification failed: expected sha256={}, actual sha256={}",
             expected.trim(),
             actual
         )));
@@ -125,10 +129,11 @@ pub fn verify_gzip_magic(path: &Path) -> Result<(), ArchiveError> {
     let mut head = [0u8; 2];
     let read = file
         .read(&mut head)
-        .map_err(|e| ArchiveError::LocalFs(format!("读取下载内容失败：{e}")))?;
+        .map_err(|e| ArchiveError::LocalFs(format!("failed to read downloaded content: {e}")))?;
     if read != 2 || head != [0x1f, 0x8b] {
         return Err(ArchiveError::Integrity(
-            "下载内容不是合法的 `.tar.gz`（gzip 魔数不匹配）。".to_string(),
+            "downloaded content is not a valid `.tar.gz` archive (gzip magic bytes do not match)"
+                .to_string(),
         ));
     }
     Ok(())
@@ -167,9 +172,9 @@ fn hash_file(path: &Path) -> Result<(String, u64), ArchiveError> {
     let mut size: u64 = 0;
     let mut buf = [0u8; 64 * 1024];
     loop {
-        let read = file
-            .read(&mut buf)
-            .map_err(|e| ArchiveError::LocalFs(format!("读取 {} 失败：{e}", path.display())))?;
+        let read = file.read(&mut buf).map_err(|e| {
+            ArchiveError::LocalFs(format!("failed to read {}: {e}", path.display()))
+        })?;
         if read == 0 {
             break;
         }

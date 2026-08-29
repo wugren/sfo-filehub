@@ -13,7 +13,7 @@ pub async fn run(config: Option<&Path>, args: PullArgs) -> Result<i32, CliError>
         parse_server_project_version_name(&args.target).map_err(CliError::InvalidInput)?;
     if args.path.is_dir() {
         return Err(CliError::InvalidInput(format!(
-            "pull 目标必须是文件路径（不能是目录）：{}",
+            "pull destination must be a file path, not a directory: {}",
             args.path.display()
         )));
     }
@@ -29,7 +29,10 @@ pub async fn run(config: Option<&Path>, args: PullArgs) -> Result<i32, CliError>
     let parent = final_path.parent().unwrap_or_else(|| Path::new("."));
     if !parent.as_os_str().is_empty() {
         std::fs::create_dir_all(parent).map_err(|e| {
-            CliError::Local(format!("创建输出目录失败：{}（{e}）", parent.display()))
+            CliError::Local(format!(
+                "failed to create output directory {}: {e}",
+                parent.display()
+            ))
         })?;
     }
 
@@ -62,7 +65,9 @@ pub async fn run(config: Option<&Path>, args: PullArgs) -> Result<i32, CliError>
         .iter()
         .find(|a| a.app == app)
         .ok_or_else(|| {
-            CliError::InvalidInput(format!("版本 {actual_version} 中不存在应用 {app}"))
+            CliError::InvalidInput(format!(
+                "app {app} does not exist in version {actual_version}"
+            ))
         })?;
     let expected_sha256 = app_info.sha256.clone();
 
@@ -80,7 +85,8 @@ pub async fn run(config: Option<&Path>, args: PullArgs) -> Result<i32, CliError>
                 if tmp.exists() && std::fs::metadata(&tmp).map(|m| m.len()).unwrap_or(0) > 0 {
                     let _ = std::fs::remove_file(&tmp);
                     return Err(CliError::Network(
-                        "下载流已开始后遇 401，不做部分字节重试；请重新执行 pull".to_string(),
+                        "received 401 after the download stream started; partial downloads are not retried, so run pull again"
+                            .to_string(),
                     ));
                 }
                 // 尚未产生部分字节：session 续期一次后重试。
@@ -89,7 +95,7 @@ pub async fn run(config: Option<&Path>, args: PullArgs) -> Result<i32, CliError>
                         refresh_session, ..
                     } => auth.transport.refresh_session(refresh_session).await?,
                     Credential::Token { .. } => {
-                        return Err(CliError::Auth("token 无效或已过期".to_string()));
+                        return Err(CliError::Auth("token is invalid or expired".to_string()));
                     }
                 };
                 let mut store = auth.store.write().await;

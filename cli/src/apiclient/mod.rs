@@ -50,13 +50,13 @@ impl FilehubClient {
         let primary = endpoint_bases
             .first()
             .cloned()
-            .ok_or_else(|| ClientError::Local("服务器无可用端点".to_string()))?;
+            .ok_or_else(|| ClientError::Local("server has no available endpoints".to_string()))?;
         let http = reqwest::Client::builder()
             .timeout(cfg.timeout)
             .connect_timeout(cfg.connect_timeout)
             .user_agent("filehub-cli/0.1")
             .build()
-            .map_err(|e| ClientError::Local(format!("初始化 HTTP 客户端失败：{e}")))?;
+            .map_err(|e| ClientError::Local(format!("failed to initialize HTTP client: {e}")))?;
         Ok(FilehubClient {
             cfg: Config {
                 base_url: primary,
@@ -93,10 +93,10 @@ impl FilehubClient {
             }
         }
         Err(ClientError::Transport(format!(
-            "{fail_prefix}（网络/连接）：{}",
+            "{fail_prefix} (network/connection): {}",
             last_error
                 .map(|e| e.to_string())
-                .unwrap_or_else(|| "无可用端点".to_string())
+                .unwrap_or_else(|| "no available endpoints".to_string())
         )))
     }
 
@@ -115,7 +115,7 @@ impl FilehubClient {
             timestamp,
         };
         let response = self
-            .send_with_fallback("登录请求失败", |base| {
+            .send_with_fallback("sign-in request failed", |base| {
                 let base = base.to_string();
                 let body = body.clone();
                 async move { Ok(self.http.post(format!("{base}/account/login")).json(&body)) }
@@ -125,26 +125,27 @@ impl FilehubClient {
         let bytes = response
             .bytes()
             .await
-            .map_err(|e| ClientError::Transport(format!("读取登录响应失败：{e}")))?;
+            .map_err(|e| ClientError::Transport(format!("failed to read sign-in response: {e}")))?;
         if !status.is_success() {
             return Err(classify_status(status, &bytes));
         }
-        let wrapped: SfoEnvelope<LoginResp> = serde_json::from_slice(&bytes)
-            .map_err(|e| ClientError::Transport(format!("解析登录响应失败：{e}")))?;
+        let wrapped: SfoEnvelope<LoginResp> = serde_json::from_slice(&bytes).map_err(|e| {
+            ClientError::Transport(format!("failed to parse sign-in response: {e}"))
+        })?;
         if wrapped.err != 0 {
             return Err(ClientError::Auth(format!(
-                "登录失败（服务端 err={}）",
+                "sign-in failed (server err={})",
                 wrapped.err
             )));
         }
-        wrapped
-            .result
-            .ok_or_else(|| ClientError::Transport("登录响应缺少 result 字段".to_string()))
+        wrapped.result.ok_or_else(|| {
+            ClientError::Transport("sign-in response is missing the result field".to_string())
+        })
     }
 
     pub async fn refresh_session(&self, refresh: &str) -> Result<LoginResp, ClientError> {
         let response = self
-            .send_with_fallback("续期请求失败", |base| {
+            .send_with_fallback("session refresh request failed", |base| {
                 let base = base.to_string();
                 async move {
                     Ok(self
@@ -155,23 +156,25 @@ impl FilehubClient {
             })
             .await?;
         let status = response.status();
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| ClientError::Transport(format!("读取续期响应失败：{e}")))?;
+        let bytes = response.bytes().await.map_err(|e| {
+            ClientError::Transport(format!("failed to read session refresh response: {e}"))
+        })?;
         if !status.is_success() {
             return Err(classify_status(status, &bytes));
         }
-        let wrapped: SfoEnvelope<LoginResp> = serde_json::from_slice(&bytes)
-            .map_err(|e| ClientError::Transport(format!("解析续期响应失败：{e}")))?;
+        let wrapped: SfoEnvelope<LoginResp> = serde_json::from_slice(&bytes).map_err(|e| {
+            ClientError::Transport(format!("failed to parse session refresh response: {e}"))
+        })?;
         if wrapped.err != 0 {
             return Err(ClientError::Auth(
-                "会话续期失败（refresh flag 失效）".to_string(),
+                "session refresh failed because the refresh flag is invalid".to_string(),
             ));
         }
-        wrapped
-            .result
-            .ok_or_else(|| ClientError::Transport("续期响应缺少 result 字段".to_string()))
+        wrapped.result.ok_or_else(|| {
+            ClientError::Transport(
+                "session refresh response is missing the result field".to_string(),
+            )
+        })
     }
 
     /// 拉取全部可见项目：按 `?limit/offset` 分页循环，用 `X-Total-Count` 驱动；
@@ -184,8 +187,9 @@ impl FilehubClient {
             let suffix = format!("/api/v1/projects?limit={PAGE_LIMIT}&offset={offset}");
             let (status, bytes, total) = self.get_json_page(&suffix, bearer).await?;
             let body = ensure_success(status, bytes.to_vec())?;
-            let page: Vec<ProjectDto> = serde_json::from_slice(&body)
-                .map_err(|e| ClientError::Transport(format!("解析项目列表失败：{e}")))?;
+            let page: Vec<ProjectDto> = serde_json::from_slice(&body).map_err(|e| {
+                ClientError::Transport(format!("failed to parse project list: {e}"))
+            })?;
             let page_len = page.len() as u32;
             projects.extend(page);
             let Some(total) = total else {
@@ -210,12 +214,12 @@ impl FilehubClient {
             projects.into_iter().filter(|p| p.name == name).collect();
         if matches.is_empty() {
             return Err(ClientError::InvalidInput(format!(
-                "项目 {name} 不存在或当前身份不可见"
+                "project {name} does not exist or is not visible to the current identity"
             )));
         }
         if matches.len() > 1 {
             return Err(ClientError::InvalidInput(format!(
-                "项目名 {name} 在服务端存在重名，无法确定目标"
+                "multiple projects named {name} exist on the server; target is ambiguous"
             )));
         }
         Ok(matches.remove(0))
@@ -229,7 +233,7 @@ impl FilehubClient {
         version: &str,
     ) -> Result<VersionDto, ClientError> {
         let response = self
-            .send_with_fallback("创建版本请求失败", |base| {
+            .send_with_fallback("create-version request failed", |base| {
                 let base = base.to_string();
                 async move {
                     Ok(self
@@ -241,13 +245,13 @@ impl FilehubClient {
             })
             .await?;
         let status = response.status();
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| ClientError::Transport(format!("读取创建版本响应失败：{e}")))?;
+        let bytes = response.bytes().await.map_err(|e| {
+            ClientError::Transport(format!("failed to read create-version response: {e}"))
+        })?;
         let body = ensure_success(status, bytes.to_vec())?;
-        serde_json::from_slice(&body)
-            .map_err(|e| ClientError::Transport(format!("解析创建版本响应失败：{e}")))
+        serde_json::from_slice(&body).map_err(|e| {
+            ClientError::Transport(format!("failed to parse create-version response: {e}"))
+        })
     }
 
     /// multipart 发布/更新 app：`PUT .../versions/{version}/apps/{app}` + `file` + `sha256`；
@@ -266,17 +270,21 @@ impl FilehubClient {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "payload.tar.gz".to_string());
         let response = self
-            .send_with_fallback("发布请求失败", |base| {
+            .send_with_fallback("publish request failed", |base| {
                 let base = base.to_string();
                 let file_name = file_name.clone();
                 async move {
-                    let file = tokio::fs::File::open(archive)
-                        .await
-                        .map_err(|e| ClientError::Local(format!("打开待发布归档失败：{e}")))?;
+                    let file = tokio::fs::File::open(archive).await.map_err(|e| {
+                        ClientError::Local(format!("failed to open archive for publishing: {e}"))
+                    })?;
                     let part = reqwest::multipart::Part::stream(file)
                         .file_name(file_name)
                         .mime_str("application/gzip")
-                        .map_err(|e| ClientError::Local(format!("构造 multipart 失败：{e}")))?;
+                        .map_err(|e| {
+                            ClientError::Local(format!(
+                                "failed to construct multipart request: {e}"
+                            ))
+                        })?;
                     let form = reqwest::multipart::Form::new()
                         .text("sha256", sha256.to_string())
                         .part("file", part);
@@ -294,10 +302,10 @@ impl FilehubClient {
         let bytes = response
             .bytes()
             .await
-            .map_err(|e| ClientError::Transport(format!("读取发布响应失败：{e}")))?;
+            .map_err(|e| ClientError::Transport(format!("failed to read publish response: {e}")))?;
         let body = ensure_success(status, bytes.to_vec())?;
         serde_json::from_slice(&body)
-            .map_err(|e| ClientError::Transport(format!("解析发布响应失败：{e}")))
+            .map_err(|e| ClientError::Transport(format!("failed to parse publish response: {e}")))
     }
 
     /// 删除版本内 app。
@@ -309,7 +317,7 @@ impl FilehubClient {
         app: &str,
     ) -> Result<(), ClientError> {
         let response = self
-            .send_with_fallback("删除 app 请求失败", |base| {
+            .send_with_fallback("delete-app request failed", |base| {
                 let base = base.to_string();
                 async move {
                     Ok(self
@@ -322,10 +330,9 @@ impl FilehubClient {
             })
             .await?;
         let status = response.status();
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| ClientError::Transport(format!("读取删除响应失败：{e}")))?;
+        let bytes = response.bytes().await.map_err(|e| {
+            ClientError::Transport(format!("failed to read delete-app response: {e}"))
+        })?;
         let _ = ensure_success(status, bytes.to_vec())?;
         Ok(())
     }
@@ -338,7 +345,7 @@ impl FilehubClient {
         version: &str,
     ) -> Result<VersionDto, ClientError> {
         let response = self
-            .send_with_fallback("锁定请求失败", |base| {
+            .send_with_fallback("lock-version request failed", |base| {
                 let base = base.to_string();
                 async move {
                     Ok(self
@@ -351,13 +358,13 @@ impl FilehubClient {
             })
             .await?;
         let status = response.status();
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| ClientError::Transport(format!("读取锁定响应失败：{e}")))?;
+        let bytes = response.bytes().await.map_err(|e| {
+            ClientError::Transport(format!("failed to read lock-version response: {e}"))
+        })?;
         let body = ensure_success(status, bytes.to_vec())?;
-        serde_json::from_slice(&body)
-            .map_err(|e| ClientError::Transport(format!("解析锁定响应失败：{e}")))
+        serde_json::from_slice(&body).map_err(|e| {
+            ClientError::Transport(format!("failed to parse lock-version response: {e}"))
+        })
     }
 
     /// 版本元数据（`None` = latest，服务端最近发布语义）。
@@ -375,8 +382,9 @@ impl FilehubClient {
             )
             .await?;
         let body = ensure_success(status, bytes)?;
-        serde_json::from_slice(&body)
-            .map_err(|e| ClientError::Transport(format!("解析版本信息失败：{e}")))
+        serde_json::from_slice(&body).map_err(|e| {
+            ClientError::Transport(format!("failed to parse version information: {e}"))
+        })
     }
 
     /// 版本列表。
@@ -390,7 +398,7 @@ impl FilehubClient {
             .await?;
         let body = ensure_success(status, bytes)?;
         serde_json::from_slice(&body)
-            .map_err(|e| ClientError::Transport(format!("解析版本列表失败：{e}")))
+            .map_err(|e| ClientError::Transport(format!("failed to parse version list: {e}")))
     }
 
     /// 流式下载到临时文件；失败清理由调用方负责。
@@ -404,7 +412,7 @@ impl FilehubClient {
     ) -> Result<(), ClientError> {
         let tail = version.unwrap_or("latest");
         let response = self
-            .send_with_fallback("下载请求失败", |base| {
+            .send_with_fallback("download request failed", |base| {
                 let base = base.to_string();
                 async move {
                     Ok(self
@@ -424,22 +432,23 @@ impl FilehubClient {
         }
         let mut body = response
             .error_for_status()
-            .map_err(|e| ClientError::Transport(format!("下载传输失败：{e}")))?
+            .map_err(|e| ClientError::Transport(format!("download transport failed: {e}")))?
             .bytes_stream();
-        let mut file = tokio::fs::File::create(tmp)
-            .await
-            .map_err(|e| ClientError::Local(format!("创建临时下载文件失败：{e}")))?;
+        let mut file = tokio::fs::File::create(tmp).await.map_err(|e| {
+            ClientError::Local(format!("failed to create temporary download file: {e}"))
+        })?;
         use futures_util::StreamExt;
         while let Some(chunk) = body.next().await {
-            let chunk =
-                chunk.map_err(|e| ClientError::Transport(format!("读取下载流失败：{e}")))?;
-            file.write_all(&chunk)
-                .await
-                .map_err(|e| ClientError::Local(format!("写入临时下载文件失败：{e}")))?;
+            let chunk = chunk.map_err(|e| {
+                ClientError::Transport(format!("failed to read download stream: {e}"))
+            })?;
+            file.write_all(&chunk).await.map_err(|e| {
+                ClientError::Local(format!("failed to write temporary download file: {e}"))
+            })?;
         }
-        file.flush()
-            .await
-            .map_err(|e| ClientError::Local(format!("刷盘临时下载文件失败：{e}")))?;
+        file.flush().await.map_err(|e| {
+            ClientError::Local(format!("failed to flush temporary download file: {e}"))
+        })?;
         Ok(())
     }
 
@@ -449,7 +458,7 @@ impl FilehubClient {
         bearer: &str,
     ) -> Result<(StatusCode, Vec<u8>), ClientError> {
         let response = self
-            .send_with_fallback("请求失败", |base| {
+            .send_with_fallback("request failed", |base| {
                 let base = base.to_string();
                 async move { Ok(self.http.get(format!("{base}{suffix}")).bearer_auth(bearer)) }
             })
@@ -458,7 +467,7 @@ impl FilehubClient {
         let bytes = response
             .bytes()
             .await
-            .map_err(|e| ClientError::Transport(format!("读取响应失败：{e}")))?;
+            .map_err(|e| ClientError::Transport(format!("failed to read response: {e}")))?;
         Ok((status, bytes.to_vec()))
     }
 
@@ -469,7 +478,7 @@ impl FilehubClient {
         bearer: &str,
     ) -> Result<(StatusCode, Vec<u8>, Option<u64>), ClientError> {
         let response = self
-            .send_with_fallback("请求失败", |base| {
+            .send_with_fallback("request failed", |base| {
                 let base = base.to_string();
                 async move { Ok(self.http.get(format!("{base}{suffix}")).bearer_auth(bearer)) }
             })
@@ -483,7 +492,7 @@ impl FilehubClient {
         let bytes = response
             .bytes()
             .await
-            .map_err(|e| ClientError::Transport(format!("读取响应失败：{e}")))?;
+            .map_err(|e| ClientError::Transport(format!("failed to read response: {e}")))?;
         Ok((status, bytes.to_vec(), total))
     }
 }
@@ -513,7 +522,7 @@ impl AuthClient {
         let server_url = store.resolve_server(server, env_server.as_deref())?;
         let credential = store.current_credential(&server_url).ok_or_else(|| {
             ClientError::Auth(format!(
-                "{server_url} 未登录，请先执行 filehub login 或提供有效 token"
+                "not signed in to {server_url}; run filehub login or provide a valid token"
             ))
         })?;
         let bearer = match &credential {
@@ -553,7 +562,7 @@ impl AuthClient {
                     )?;
                     store.flush()?;
                     drop(store);
-                    log::info!("session 已续期并重试一次");
+                    log::info!("session refreshed and request retried once");
                     call(renewed.session).await
                 }
                 Credential::Token { .. } => Err(ClientError::Auth(message)),
@@ -618,15 +627,21 @@ fn classify_status(status: StatusCode, body: &[u8]) -> ClientError {
     };
     match status.as_u16() {
         401 => fallback(ClientError::Auth(
-            "认证失败（401）：凭据无效或已过期".to_string(),
+            "authentication failed (401): credentials are invalid or expired".to_string(),
         )),
-        403 => fallback(ClientError::Forbidden("权限不足（403）".to_string())),
-        404 => fallback(ClientError::NotFound("资源不存在（404）".to_string())),
+        403 => fallback(ClientError::Forbidden(
+            "the server rejected this operation (403)".to_string(),
+        )),
+        404 => fallback(ClientError::NotFound(
+            "resource not found (404)".to_string(),
+        )),
         409 => fallback(ClientError::Conflict(
-            "版本/项目已存在（409），请更换版本号".to_string(),
+            "request conflicts with existing server state (409)".to_string(),
         )),
-        422 => fallback(ClientError::InvalidInput("输入无效（422）".to_string())),
-        code => ClientError::Transport(format!("服务端传输/服务器错误（HTTP {code}）：{message}")),
+        422 => fallback(ClientError::InvalidInput(
+            "the server rejected the input (422)".to_string(),
+        )),
+        code => ClientError::Transport(format!("server transport/error (HTTP {code}): {message}")),
     }
 }
 

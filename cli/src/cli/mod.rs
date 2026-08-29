@@ -47,14 +47,14 @@ impl CliError {
 impl std::fmt::Display for CliError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CliError::Usage(message) => write!(f, "用法错误：{message}"),
+            CliError::Usage(message) => write!(f, "usage error: {message}"),
             CliError::Auth(message) => write!(f, "{message}"),
-            CliError::Forbidden(message) => write!(f, "权限不足：{message}"),
+            CliError::Forbidden(message) => write!(f, "permission denied: {message}"),
             CliError::Conflict(message) => write!(f, "{message}"),
-            CliError::InvalidInput(message) => write!(f, "输入无效：{message}"),
-            CliError::Network(message) => write!(f, "网络/传输：{message}"),
-            CliError::Integrity(message) => write!(f, "内容完整性：{message}"),
-            CliError::Local(message) => write!(f, "本地文件系统：{message}"),
+            CliError::InvalidInput(message) => write!(f, "invalid input: {message}"),
+            CliError::Network(message) => write!(f, "network/transport: {message}"),
+            CliError::Integrity(message) => write!(f, "content integrity: {message}"),
+            CliError::Local(message) => write!(f, "local filesystem: {message}"),
         }
     }
 }

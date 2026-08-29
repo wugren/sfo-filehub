@@ -327,7 +327,7 @@ fn route(
                 .unwrap_or("")
                 .to_string();
             if version_text == "exists" {
-                return error_response("409 Conflict", "conflict", "version 已存在");
+                return error_response("409 Conflict", "conflict", "version already exists");
             }
             if version_text.is_empty() {
                 return error_response(

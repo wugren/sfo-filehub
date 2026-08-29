@@ -71,7 +71,7 @@ impl CredentialStore {
         let raw = std::fs::read_to_string(path)?;
         let doc: ConfigDocument = toml::from_str(&raw).map_err(|e| {
             CredentialStoreError::Corrupt(format!(
-                "配置/凭据文件解析失败（{}）：{e}；请重新 login 或手动移除后重试",
+                "failed to parse configuration/credential file ({}): {e}; sign in again or remove the file manually and retry",
                 path.display()
             ))
         })?;
@@ -103,7 +103,7 @@ impl CredentialStore {
             }
         }
         Err(CredentialStoreError::NoServer(
-            "未指定服务器，且无默认服务器/唯一已存服务器；请显式传入 SERVER 或先执行 filehub login"
+            "no server was specified and no default or sole stored server is available; pass SERVER explicitly or run filehub login first"
                 .to_string(),
         ))
     }
@@ -177,7 +177,8 @@ impl CredentialStore {
         let identity = normalize_server(server)?;
         let key = self.credential_key(&identity).ok_or_else(|| {
             CredentialStoreError::NotLoggedIn(
-                "续期失败：该服务器无本地凭据，请重新 login".to_string(),
+                "session refresh failed because this server has no local credentials; sign in again"
+                    .to_string(),
             )
         })?;
         let entry = self.servers.get_mut(&key).expect("key from credential_key");
@@ -201,7 +202,7 @@ impl CredentialStore {
             .collect();
         if matched.is_empty() {
             return Err(CredentialStoreError::NotLoggedIn(format!(
-                "{target} 未登录，没有可清除的凭据"
+                "not signed in to {target}; there are no credentials to remove"
             )));
         }
         for key in matched {
@@ -226,8 +227,9 @@ impl CredentialStore {
             default_server: self.default_server.clone(),
             server: self.servers.clone(),
         };
-        let content = toml::to_string(&doc)
-            .map_err(|e| CredentialStoreError::Io(format!("序列化配置失败：{e}")))?;
+        let content = toml::to_string(&doc).map_err(|e| {
+            CredentialStoreError::Io(format!("failed to serialize configuration: {e}"))
+        })?;
         security::atomic_write(&self.path, content.as_bytes())
     }
 
@@ -270,7 +272,7 @@ pub(crate) fn normalize_server(value: &str) -> Result<String, CredentialStoreErr
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return Err(CredentialStoreError::NoServer(
-            "服务器地址不能为空".to_string(),
+            "server address cannot be empty".to_string(),
         ));
     }
     let without_scheme = trimmed
@@ -285,7 +287,7 @@ pub(crate) fn normalize_server(value: &str) -> Result<String, CredentialStoreErr
         .trim_end_matches('/');
     if identity.is_empty() {
         return Err(CredentialStoreError::NoServer(
-            "服务器地址缺少 host[:port]".to_string(),
+            "server address is missing host[:port]".to_string(),
         ));
     }
     Ok(identity.to_string())

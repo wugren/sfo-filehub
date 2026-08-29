@@ -25,7 +25,7 @@ pub async fn run(config: Option<&Path>, args: VersionsArgs) -> Result<i32, CliEr
 
     let body = if args.format == "json" {
         serde_json::to_vec_pretty(&versions)
-            .map_err(|e| CliError::Local(format!("序列化版本 JSON 失败：{e}")))?
+            .map_err(|e| CliError::Local(format!("failed to serialize versions as JSON: {e}")))?
     } else {
         render_text(&versions).into_bytes()
     };
@@ -40,10 +40,10 @@ pub async fn run(config: Option<&Path>, args: VersionsArgs) -> Result<i32, CliEr
             let mut stdout = std::io::stdout();
             stdout
                 .write_all(&body)
-                .map_err(|e| CliError::Local(format!("输出 stdout 失败：{e}")))?;
+                .map_err(|e| CliError::Local(format!("failed to write to stdout: {e}")))?;
             stdout
                 .write_all(b"\n")
-                .map_err(|e| CliError::Local(format!("输出 stdout 失败：{e}")))?;
+                .map_err(|e| CliError::Local(format!("failed to write to stdout: {e}")))?;
         }
     }
     Ok(0)
@@ -80,11 +80,13 @@ fn render_text(versions: &[crate::apiclient::contract::VersionDto]) -> String {
 fn write_output_file(path: &Path, body: &[u8]) -> Result<(), CliError> {
     let value = path.to_string_lossy();
     if value.contains('\0') {
-        return Err(CliError::InvalidInput("输出路径包含 NUL 字符".to_string()));
+        return Err(CliError::InvalidInput(
+            "output path contains a NUL character".to_string(),
+        ));
     }
     if path.is_dir() {
         return Err(CliError::InvalidInput(format!(
-            "输出路径是目录而不是文件：{}",
+            "output path is a directory, not a file: {}",
             path.display()
         )));
     }
@@ -93,7 +95,7 @@ fn write_output_file(path: &Path, body: &[u8]) -> Result<(), CliError> {
         _ => std::path::PathBuf::from("."),
     };
     std::fs::create_dir_all(&parent)
-        .map_err(|e| CliError::Local(format!("创建输出目录失败：{e}")))?;
+        .map_err(|e| CliError::Local(format!("failed to create output directory: {e}")))?;
     let tmp = parent.join(format!(
         ".{}.{}.tmp",
         path.file_name()
@@ -101,10 +103,13 @@ fn write_output_file(path: &Path, body: &[u8]) -> Result<(), CliError> {
             .unwrap_or_else(|| "versions.txt".to_string()),
         std::process::id()
     ));
-    std::fs::write(&tmp, body).map_err(|e| CliError::Local(format!("写入版本输出失败：{e}")))?;
+    std::fs::write(&tmp, body)
+        .map_err(|e| CliError::Local(format!("failed to write version output: {e}")))?;
     if path.exists() {
-        std::fs::remove_file(path).map_err(|e| CliError::Local(format!("替换旧输出失败：{e}")))?;
+        std::fs::remove_file(path)
+            .map_err(|e| CliError::Local(format!("failed to replace old output: {e}")))?;
     }
-    std::fs::rename(&tmp, path).map_err(|e| CliError::Local(format!("落盘版本输出失败：{e}")))?;
+    std::fs::rename(&tmp, path)
+        .map_err(|e| CliError::Local(format!("failed to persist version output: {e}")))?;
     Ok(())
 }

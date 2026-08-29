@@ -58,7 +58,10 @@ async fn cmd_help_version_and_usage_exit_codes() {
         let out = run_bin(None, &[flag], None);
         assert_eq!(out.code, 0, "{flag} exits 0");
         assert!(out.stdout.contains("Usage:"), "{flag} prints usage");
-        assert!(out.stdout.contains("退出码"), "{flag} prints exit-code table");
+        assert!(
+            out.stdout.contains("Exit codes"),
+            "{flag} prints exit-code table"
+        );
     }
     let version = run_bin(None, &["--version"], None);
     assert_eq!(version.code, 0, "--version exits 0");
@@ -233,7 +236,10 @@ async fn cmd_target_syntax_errors_are_invalid_input() {
     // K10：缺段/空段/多余段 → 输入无效 5；IPv6 与协议头解析在 args 单测覆盖。
     let out = run_bin(None, &["versions", "127.0.0.1:1"], None);
     assert_eq!(out.code, 5, "missing project segment");
-    assert!(out.stderr.contains("目标必须为"), "target error message");
+    assert!(
+        out.stderr.contains("target must match"),
+        "target error message"
+    );
     let extra = run_bin(None, &["versions", "h/demo/extra"], None);
     assert_eq!(extra.code, 5, "extra segment");
     let empty = run_bin(None, &["push", "h//v/app", "/tmp/x"], None);

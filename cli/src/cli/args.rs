@@ -8,13 +8,13 @@ use clap::{Args, Parser, Subcommand};
 #[command(
     name = "filehub",
     version,
-    about = "filehub 文件集散发布客户端",
-    after_help = "退出码：0 成功 / 1 用法错误 / 2 认证失败 / 3 授权失败 / 4 冲突 / 5 输入无效 / 6 网络/传输 / 7 内容完整性 / 8 本地文件系统",
+    about = "filehub artifact publishing client",
+    after_help = "Exit codes: 0 success / 1 usage error / 2 authentication failure / 3 authorization failure / 4 conflict / 5 invalid input / 6 network/transport / 7 content integrity / 8 local filesystem",
     subcommand_required = true,
     arg_required_else_help = true
 )]
 pub struct CliArgs {
-    /// 覆盖凭据与配置文件路径（默认平台用户配置目录 config.toml）。
+    /// Override the credential and configuration file path
     #[arg(long, global = true)]
     pub config: Option<PathBuf>,
 
@@ -24,61 +24,61 @@ pub struct CliArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// 账号密码或 token 登录并保存本地凭据
+    /// Sign in with a password or token and save the credentials locally
     Login(LoginArgs),
-    /// 清除指定/默认服务器的本地凭据
+    /// Remove locally stored credentials for the specified or default server
     Logout(LogoutArgs),
-    /// 把文件或目录发布为 `<server/project/version/name>` 应用（统一 .tar.gz）
+    /// Publish a file or directory as a .tar.gz app at `<server/project/version/name>`
     Push(PushArgs),
-    /// 按 `<server/project/version/name>` 拉取 .tar.gz 到指定文件路径
+    /// Download a .tar.gz app from `<server/project/version/name>` to a file
     Pull(PullArgs),
-    /// 查询 `<server/project>` 的版本信息（文本或 JSON）
+    /// List version information for `<server/project>` as text or JSON
     Versions(VersionsArgs),
-    /// 显式创建项目版本（版本已存在时失败）
+    /// Create a project version, failing if it already exists
     #[command(name = "new-version")]
     NewVersion(NewVersionArgs),
-    /// 不可逆锁定项目版本
+    /// Permanently lock a project version
     #[command(name = "lock-version")]
     LockVersion(LockVersionArgs),
-    /// 从项目版本中删除指定应用
+    /// Delete an app from a project version
     #[command(name = "delete-app")]
     DeleteApp(DeleteAppArgs),
 }
 
 #[derive(Debug, Args)]
 pub struct LoginArgs {
-    /// filehub 服务地址（host[:port]，无需协议头；HTTPS 优先，loopback 可降级 HTTP）
+    /// filehub server address as host[:port] (HTTPS preferred; loopback may use HTTP)
     pub server: Option<String>,
-    /// 账号密码登录用户名（缺省交互提示）
+    /// Username for password sign-in (prompted when omitted)
     #[arg(short, long, conflicts_with = "token_stdin")]
     pub username: Option<String>,
-    /// 密码从 stdin 读取（剥离末尾换行）
+    /// Read the password from stdin, stripping the trailing newline
     #[arg(long, conflicts_with = "token_stdin")]
     pub password_stdin: bool,
-    /// token 从 stdin 读取；与账号密码选项互斥
+    /// Read the token from stdin; conflicts with password sign-in options
     #[arg(long)]
     pub token_stdin: bool,
 }
 
 #[derive(Debug, Args)]
 pub struct LogoutArgs {
-    /// 服务器地址 host[:port]（缺省按默认服务器解析；无需协议头）
+    /// Server address as host[:port] (uses the default server when omitted)
     pub server: Option<String>,
 }
 
 #[derive(Debug, Args)]
 pub struct PushArgs {
-    /// <server/project/version/name>（server 为 host[:port]，含端口/IPv6）
+    /// `<server/project/version/name>` where server is host[:port], including IPv6
     pub target: String,
-    /// 待发布的文件或目录
+    /// File or directory to publish
     pub path: PathBuf,
 }
 
 #[derive(Debug, Args)]
 pub struct PullArgs {
-    /// <server/project/version/name>（server 为 host[:port]，含端口/IPv6）
+    /// `<server/project/version/name>` where server is host[:port], including IPv6
     pub target: String,
-    /// 下载归档的精确输出文件路径
+    /// Exact output file path for the downloaded archive
     pub path: PathBuf,
 }
 
@@ -86,23 +86,23 @@ pub struct PullArgs {
 pub struct VersionsArgs {
     /// <server/project>
     pub target: String,
-    /// 输出到指定文件（缺省 stdout）
+    /// Write output to a file instead of stdout
     #[arg(short = 'o', long)]
     pub output: Option<PathBuf>,
-    /// 输出格式：text 或 json（缺省 text）
+    /// Output format: text or json
     #[arg(long, value_parser = ["text", "json"], default_value = "text")]
     pub format: String,
 }
 
 #[derive(Debug, Args)]
 pub struct NewVersionArgs {
-    /// <server/project/version>（必须为尚未创建的版本）
+    /// `<server/project/version>` for a version that does not yet exist
     pub target: String,
 }
 
 #[derive(Debug, Args)]
 pub struct LockVersionArgs {
-    /// <server/project/version>（锁定后不可逆）
+    /// `<server/project/version>` (locking cannot be undone)
     pub target: String,
 }
 
@@ -131,18 +131,20 @@ fn parse_target(
         .unwrap_or(value);
     let raw: Vec<&str> = value.split('/').collect();
     if raw.len() != expected_segments {
-        return Err(format!("目标必须为 {form}；实际输入：{value}"));
+        return Err(format!("target must match {form}; received: {value}"));
     }
     let server = raw[0].trim().to_string();
     if server.is_empty() {
-        return Err(format!("server 不能为空，必须为 {form}；实际输入：{value}"));
+        return Err(format!(
+            "server cannot be empty and target must match {form}; received: {value}"
+        ));
     }
     let mut fields = Vec::with_capacity(expected_segments - 1);
     for segment in &raw[1..] {
         let field = segment.trim().to_string();
         if field.is_empty() {
             return Err(format!(
-                "目标字段不能为空，必须为 {form}；实际输入：{value}"
+                "target fields cannot be empty and target must match {form}; received: {value}"
             ));
         }
         fields.push(field);
