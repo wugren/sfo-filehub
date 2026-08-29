@@ -1,0 +1,67 @@
+schema_version: 1
+task_manifest: task.yaml
+risk_profile: risk-profile.yaml
+api_impact:
+  public_api: backward-compatible
+  crate_root_export_change: false
+  build_surface_change: false
+  documentation_examples_affected: false
+evidence_inputs: ["install-cli.sh", "install-cli.ps1", "README.md", ".github/workflows/build.yml", "tests/install_cli_scripts_contract.py"]
+contract_checks:
+  mode: disabled
+  reason: 新增安装脚本不改变 Rust API、crate 导出或 build graph；脚本语法和 Release/README 消费契约由任务 unit/integration 步骤验证
+  steps: []
+defaults:
+  workdir: .
+  timeout_sec: 300
+  env: {}
+levels:
+  unit:
+    mode: enabled
+    summary: 覆盖版本参数、平台拒绝、归档条目校验及 PowerShell 安全/回滚分支契约
+    test_targets:
+      - tests/install_cli_scripts_contract.py
+    preconditions:
+      tools: [python3, bash, tar]
+      env: []
+      services: []
+      notes: [所有网络和平台探测均由临时 mock 命令替代]
+    steps:
+      - id: installer-shell-parse
+        name: 解析 POSIX 安装脚本语法
+        change_ids: ["fh-install-cli-from-github"]
+        run: ["bash", "-n", "install-cli.sh"]
+      - id: installer-unit-contract
+        name: 运行安装器参数与分支级契约测试
+        change_ids: ["fh-install-cli-from-github"]
+        run: ["python3", "tests/install_cli_scripts_contract.py", "--suite", "unit"]
+  dv:
+    mode: enabled
+    summary: 用本地假 GitHub API 和真实 tar.gz 执行 Unix 最新/指定版本、覆盖与失败清理流程
+    test_targets:
+      - tests/install_cli_scripts_contract.py
+    preconditions:
+      tools: [python3, bash, tar]
+      env: []
+      services: []
+      notes: [只写 Python 临时目录，不访问 GitHub 或系统安装目录]
+    steps:
+      - id: installer-dv-contract
+        name: 运行 Unix 安装器端到端模拟安装与恢复测试
+        change_ids: ["fh-install-cli-from-github"]
+        run: ["python3", "tests/install_cli_scripts_contract.py", "--suite", "dv"]
+  integration:
+    mode: enabled
+    summary: 校验 workflow 资产名、两个安装器接口、README 示例及可用时 PowerShell 解析
+    test_targets:
+      - tests/install_cli_scripts_contract.py
+    preconditions:
+      tools: [python3]
+      env: []
+      services: []
+      notes: [当前环境没有 pwsh 时记录目标 Windows 平台执行缺口，静态安全契约仍执行]
+    steps:
+      - id: installer-integration-contract
+        name: 运行 Release 生产者到安装器和 README 消费者的集成契约测试
+        change_ids: ["fh-install-cli-from-github"]
+        run: ["python3", "tests/install_cli_scripts_contract.py", "--suite", "integration"]

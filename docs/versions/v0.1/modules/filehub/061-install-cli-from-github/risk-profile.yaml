@@ -1,0 +1,62 @@
+schema_version: 1
+task_manifest: task.yaml
+
+change_ids: ["fh-install-cli-from-github"]
+source_bindings:
+  proposal: proposal.md
+  design_source: pipeline/plan.md
+
+risks:
+  contract:
+    applies: true
+    evidence:
+      - install-cli.sh
+      - install-cli.ps1
+      - README.md
+    required_checks:
+      - 省略版本时只使用 GitHub releases/latest 返回并通过严格语义版本校验的正式 Release tag
+      - 显式 0.1.0 与 v0.1.0 必须解析为相同 tag 和资产名，非法版本失败关闭
+      - Linux x86_64、macOS aarch64、Windows x86_64 的支持矩阵和默认安装目录与 README 一致
+      - 自定义安装目录不得隐式修改系统 Path，Windows 默认目录加入机器 Path 必须幂等
+  data:
+    applies: false
+    evidence: "不修改数据库、持久化 schema、产品配置格式或用户业务数据；只创建或替换 CLI 二进制，并可能添加精确的 Windows 机器 Path 项。"
+    required_checks: []
+  security:
+    applies: true
+    evidence:
+      - install-cli.sh
+      - install-cli.ps1
+    required_checks:
+      - 固定 GitHub 仓库与 HTTPS 端点，版本和 API tag 通过严格白名单校验后才能进入 URL
+      - 归档不得整体解压到系统目录，只验证并提取根级 filehub 或 filehub.exe
+      - 提权仅用于最终系统目录创建替换和 Windows 机器 Path 更新，下载与解包不以提升权限运行
+      - 不支持的系统架构、非预期归档、下载错误和权限错误均失败且不保留半安装结果
+  runtime:
+    applies: true
+    evidence:
+      - install-cli.sh
+      - install-cli.ps1
+    required_checks:
+      - 成功与失败路径都清理随机临时目录
+      - 最终安装使用同目录临时文件加替换，避免下载或解包失败破坏已有可执行文件
+      - GitHub API 失败、限流、404、缺失或非法 tag 时保持安装目录与 Path 不变
+  build:
+    applies: true
+    evidence:
+      - .github/workflows/build.yml
+      - README.md
+      - install-cli.sh
+      - install-cli.ps1
+    required_checks:
+      - 下载资产名严格匹配现有 filehub-cli_<version>_<platform>.tar.gz 发布契约
+      - 安装器只接受当前 Release 实际生产的三种平台架构组合并明确拒绝其余组合
+      - README 不宣称当前不存在的独立 checksum 或代码签名保证，并保留手工归档下载备用方式
+  ui:
+    applies: false
+    evidence: "不修改 admin-web 页面、导航、交互、可访问性或本地化；命令行安装接口归入 contract。"
+    required_checks: []
+  harness:
+    applies: false
+    evidence: "不修改 Harness 规则、检查器、模板或统一测试基础设施；仅消费现有 high-risk auto-pipeline。"
+    required_checks: []

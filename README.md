@@ -41,7 +41,51 @@ docker run -d --name filehub \
 ### 方式二：GitHub Release CLI 归档
 
 打开 [wugren/sfo-filehub 的 Releases 页面](https://github.com/wugren/sfo-filehub/releases)，
-选择对应版本的发布，下载适合你的平台的 CLI 归档：
+可以在线获取 GitHub 上的安装脚本并立即安装 CLI，无需先把脚本保存到本地。省略版本
+参数时安装 GitHub 最新正式 Release；也可以明确指定 `0.1.0` 或 `v0.1.0`。
+
+Linux x86_64 / macOS Apple Silicon：
+
+```bash
+bash -o pipefail -c 'curl -fsSL https://raw.githubusercontent.com/wugren/sfo-filehub/main/install-cli.sh | sh'                         # 安装最新正式版
+bash -o pipefail -c 'curl -fsSL https://raw.githubusercontent.com/wugren/sfo-filehub/main/install-cli.sh | sh -s -- 0.1.0'             # 安装指定版本
+```
+
+默认安装到 `/usr/local/bin/filehub`，目录不可写时脚本只在最终写入阶段调用
+`sudo`。无管理员权限或希望使用其它目录时可执行：
+
+```bash
+bash -o pipefail -c 'curl -fsSL https://raw.githubusercontent.com/wugren/sfo-filehub/main/install-cli.sh | sh -s -- --install-dir "$HOME/.local/bin"'
+bash -o pipefail -c 'curl -fsSL https://raw.githubusercontent.com/wugren/sfo-filehub/main/install-cli.sh | sh -s -- 0.1.0 --install-dir "$HOME/.local/bin"'
+```
+
+自定义目录不会被自动加入 `PATH`，需要由用户自行配置。默认安装的卸载命令为
+`sudo rm /usr/local/bin/filehub`。
+
+Windows x86_64（在管理员 PowerShell 中执行默认系统安装）：
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/wugren/sfo-filehub/main/install-cli.ps1')))                         # 安装最新正式版
+& ([scriptblock]::Create((Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/wugren/sfo-filehub/main/install-cli.ps1'))) -Version 0.1.0          # 安装指定版本
+```
+
+默认安装到 `%ProgramFiles%\filehub\bin\filehub.exe`，并幂等加入机器级 `Path`；
+安装后需打开新终端。自定义目录不要求管理员权限，也不会修改 `Path`：
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/wugren/sfo-filehub/main/install-cli.ps1'))) -InstallDir "$HOME\bin"
+& ([scriptblock]::Create((Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/wugren/sfo-filehub/main/install-cli.ps1'))) -Version 0.1.0 -InstallDir "$HOME\bin"
+```
+
+以上命令会立即执行 `wugren/sfo-filehub` 仓库 `main` 分支中的脚本；如需先审阅内容，
+可分别打开 [install-cli.sh](https://github.com/wugren/sfo-filehub/blob/main/install-cli.sh)
+和 [install-cli.ps1](https://github.com/wugren/sfo-filehub/blob/main/install-cli.ps1)。
+
+卸载默认 Windows 安装时，在管理员 PowerShell 中删除
+`$env:ProgramFiles\filehub`，并从“系统属性 → 环境变量”的机器级 `Path` 中移除
+`%ProgramFiles%\filehub\bin`。
+
+当前 Release 支持矩阵如下；其它系统/架构会由脚本明确拒绝：
 
 | 归档 | 内容 |
 |------|------|
@@ -49,7 +93,7 @@ docker run -d --name filehub \
 | `filehub-cli_<版本>_macos-aarch64.tar.gz` | macOS（Apple Silicon）CLI 二进制 `filehub` |
 | `filehub-cli_<版本>_windows-x86_64.tar.gz` | Windows CLI 二进制 `filehub.exe` |
 
-CLI 解压即用：
+脚本不可用时，也可以手工下载对应归档并解压：
 
 ```bash
 tar -xzf filehub-cli_0.1.0_linux-x86_64.tar.gz

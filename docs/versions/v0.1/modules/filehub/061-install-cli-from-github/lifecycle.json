@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "stages": {
+    "proposal": {
+      "inputs": {
+        "docs/versions/v0.1/modules/filehub/061-install-cli-from-github/proposal.md": "93d1c2f744cb5aaaa71933303df8bf91a4338870cc7711ba013c67a1994c9b71"
+      },
+      "status": "complete",
+      "task_binding_schema": 2,
+      "task_binding_sha256": "ec256d0a2013222256fe521a49873669161c50c3be4448cce1d81ef9b066f13c"
+    }
+  },
+  "task_manifest": "task.yaml"
+}
