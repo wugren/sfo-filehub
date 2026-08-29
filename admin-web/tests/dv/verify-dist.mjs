@@ -20,4 +20,27 @@ for (const name of assets) {
     throw new Error(`构建资源为空文件: ${file}`);
   }
 }
+
+const requireSameOriginApi =
+  process.env.GITHUB_ACTIONS === "true" || process.env.VITE_API_BASE_URL === "/";
+if (requireSameOriginApi) {
+  if (process.env.VITE_API_BASE_URL !== "/") {
+    throw new Error(
+      "Docker/CI 管理页面构建必须设置 VITE_API_BASE_URL=/，避免浏览器请求本机 API",
+    );
+  }
+
+  const javascript = assets
+    .filter((name) => name.endsWith(".js"))
+    .map((name) => readFileSync(join(assetsDir, name), "utf8"))
+    .join("\n");
+  if (!javascript.includes("/account/login")) {
+    throw new Error("构建产物缺少登录 API 路由: /account/login");
+  }
+  if (javascript.includes("http://127.0.0.1:8080")) {
+    throw new Error(
+      "Docker/CI 管理页面构建产物包含 loopback API 地址: http://127.0.0.1:8080",
+    );
+  }
+}
 console.log(`dv verify: dist ok (${assets.join(", ")})`);

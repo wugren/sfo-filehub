@@ -118,6 +118,11 @@ class UnitContractTests(unittest.TestCase):
             locked_commands,
         )
 
+    def test_docker_web_dist_is_built_with_same_origin_api(self) -> None:
+        build = step("test-web", "Build and verify dist")
+        self.assertEqual(build["env"]["VITE_API_BASE_URL"], "/")
+        self.assertEqual(build["run"], "npm run test:dv")
+
 
 class DvContractTests(unittest.TestCase):
     def test_updated_lockfile_is_uploaded_and_consumed_by_matrix(self) -> None:
@@ -299,6 +304,9 @@ class IntegrationContractTests(unittest.TestCase):
         assemble = step("build-image", "Assemble minimal image context")["run"]
         self.assertIn("chmod +x ctx/server/filehub-server", assemble)
         self.assertIn("test -f ctx/web/index.html", assemble)
+
+        web_build = step("test-web", "Build and verify dist")
+        self.assertEqual(web_build["env"]["VITE_API_BASE_URL"], "/")
 
     def test_readme_matches_cli_only_release_contract(self) -> None:
         self.assertNotIn("filehub-server_<版本>_linux_x86_64.tar.gz", ROOT_README)

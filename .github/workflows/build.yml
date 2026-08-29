@@ -261,6 +261,8 @@ jobs:
         run: npm run test:integration
 
       - name: Build and verify dist
+        env:
+          VITE_API_BASE_URL: /
         run: npm run test:dv
 
       - name: Store admin-web dist
