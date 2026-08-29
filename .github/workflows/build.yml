@@ -486,6 +486,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.version.outputs.version }}
           RELEASE_TAG: ${{ needs.authorize-publication.outputs.release_tag }}
+          SOURCE_SHA: ${{ needs.version.outputs.source_sha }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -498,6 +499,17 @@ jobs:
             gh release upload "${RELEASE_TAG}" "${assets[@]}" \
               --repo "${GITHUB_REPOSITORY}" \
               --clobber
+            git fetch --force --no-tags origin \
+              "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+            tag_sha="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+            if [[ "${tag_sha}" != "${SOURCE_SHA}" ]]; then
+              echo "Release tag ${RELEASE_TAG} moved to ${tag_sha}; expected ${SOURCE_SHA}." >&2
+              exit 1
+            fi
+            gh release edit "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "${VERSION}" \
+              --draft=false
           else
             owner="${GITHUB_REPOSITORY_OWNER,,}"
             printf -v notes 'filehub %s\n\nDocker image: ghcr.io/%s/filehub:v%s\n\nRelease assets:\n- filehub-cli_%s_linux-x86_64.tar.gz\n- filehub-cli_%s_macos-aarch64.tar.gz\n- filehub-cli_%s_windows-x86_64.tar.gz' \
@@ -505,6 +517,6 @@ jobs:
             gh release create "${RELEASE_TAG}" "${assets[@]}" \
               --repo "${GITHUB_REPOSITORY}" \
               --verify-tag \
-              --title "filehub ${VERSION}" \
+              --title "${VERSION}" \
               --notes "$notes"
           fi

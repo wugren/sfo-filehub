@@ -155,6 +155,36 @@ class DvContractTests(unittest.TestCase):
             step("release", "Create or update GitHub Release")["env"]["RELEASE_TAG"],
             "${{ needs.authorize-publication.outputs.release_tag }}",
         )
+        self.assertEqual(
+            step("release", "Create or update GitHub Release")["env"]["SOURCE_SHA"],
+            "${{ needs.version.outputs.source_sha }}",
+        )
+
+    def test_release_title_uses_version_and_existing_draft_is_published(self) -> None:
+        publish = step("release", "Create or update GitHub Release")["run"]
+        branches = re.search(
+            r"if gh release view .*?; then\n(?P<existing>.*?)\n\s*else\n"
+            r"(?P<new>.*?)\n\s*fi\s*$",
+            publish,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(branches)
+        existing = branches.group("existing")
+        new = branches.group("new")
+
+        self.assertLess(existing.index("gh release upload"), existing.index("git fetch"))
+        self.assertLess(existing.index("git fetch"), existing.index("gh release edit"))
+        self.assertIn("refs/tags/${RELEASE_TAG}^{commit}", existing)
+        self.assertIn('"${tag_sha}" != "${SOURCE_SHA}"', existing)
+        self.assertIn('gh release edit "${RELEASE_TAG}"', existing)
+        self.assertIn('--title "${VERSION}"', existing)
+        self.assertIn("--draft=false", existing)
+
+        self.assertIn('gh release create "${RELEASE_TAG}"', new)
+        self.assertIn('--title "${VERSION}"', new)
+        self.assertNotIn("--draft", new)
+        self.assertNotIn('--title "filehub ${VERSION}"', publish)
+        self.assertNotIn('--title "${RELEASE_TAG}"', publish)
 
     def test_image_publish_pushes_version_and_latest_from_same_image(self) -> None:
         publish = step("build-image", "Publish image to GHCR")["run"]
